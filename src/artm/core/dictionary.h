@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <utility>
+#include <set>
 
 #include "artm/core/common.h"
 #include "artm/core/thread_safe_holder.h"
@@ -68,6 +69,9 @@ class Dictionary {
 
   bool HasToken(const Token& token) const { return token_index_.find(token) != token_index_.end(); }
 
+  void AddTransactionType(const ClassId& class_id, const TransactionType& transaction_type);
+  void AddTransactionTypes(const artm::StringArray& transaction_types);
+
   // SECTION OF GETTERS
   // general method to return all cooc tokens with their values for given token
   const std::unordered_map<int, float>* token_cooc_values(const Token& token) const;
@@ -90,6 +94,10 @@ class Dictionary {
   const std::unordered_map<int, std::unordered_map<int, float> >& cooc_tfs() const { return cooc_tfs_; }
   const std::unordered_map<int, std::unordered_map<int, float> >& cooc_dfs() const { return cooc_dfs_; }
 
+  const std::set<TransactionType>* GetTransactionTypes(const ClassId& class_id) const;
+  const std::set<TransactionType> GetAllTransactionTypes() const;
+  bool ContainsTransactions() const { return !transaction_type_.empty(); }
+
   // SECTION OF OPERATIONS
   float CountTopicCoherence(const std::vector<core::Token>& tokens_to_score);
 
@@ -106,6 +114,7 @@ class Dictionary {
   CoocMap cooc_tfs_;
   CoocMap cooc_dfs_;
   size_t num_items_in_collection_;
+  std::unordered_map<ClassId, std::set<TransactionType> > transaction_type_;
 
   void AddCoocImpl(const Token& token_1, const Token& token_2, float value, CoocMap* cooc_map);
   void AddCoocImpl(int index_1, int index_2, float value, CoocMap* cooc_map);

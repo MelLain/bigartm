@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "boost/functional/hash.hpp"
 
@@ -10,6 +11,7 @@ namespace artm {
 namespace core {
 
 typedef std::string ClassId;
+typedef std::vector<ClassId> TransactionType;
 const std::string DefaultClass = "@default_class";
 const std::string DocumentsClass = "@documents_class";
 

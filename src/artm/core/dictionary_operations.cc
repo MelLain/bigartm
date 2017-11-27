@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <fstream>
 #include <functional>
+#include <set>
 #include <string>
 #include <map>
 #include <memory>
@@ -38,6 +39,9 @@ std::shared_ptr<Dictionary> DictionaryOperations::Create(const DictionaryData& d
         has_token_value ? data.token_value(index) : 0.0f,
         has_token_tf ? data.token_tf(index) : 0.0f,
         has_token_df ? data.token_df(index) : 0.0f));
+    }
+    for (const auto& transaction_type : data.transaction_types()) {
+        dictionary->AddTransactionTypes(transaction_type);
     }
   } else {
     LOG(ERROR) << "Can't create Dictionary using the cooc part of DictionaryData";
@@ -91,6 +95,13 @@ void DictionaryOperations::Export(const ExportDictionaryArgs& args, const Dictio
     token_dict_data.add_token_value(entry->token_value());
     token_dict_data.add_token_tf(entry->token_tf());
     token_dict_data.add_token_df(entry->token_df());
+  }
+
+  for (const auto& transaction_type : dict.GetAllTransactionTypes()) {
+    auto ptr = token_dict_data.add_transaction_types();
+    for (const ClassId& class_id : transaction_type) {
+      ptr->add_value(class_id);
+    }
   }
 
   std::string str = token_dict_data.SerializeAsString();
@@ -201,6 +212,10 @@ std::shared_ptr<Dictionary> DictionaryOperations::Import(const ImportDictionaryA
         dictionary->AddEntry(DictionaryEntry(Token(dict_data.class_id(token_id), dict_data.token(token_id)),
           dict_data.token_value(token_id), dict_data.token_tf(token_id), dict_data.token_df(token_id)));
       }
+
+      for (const auto& transaction_type : dict_data.transaction_types()) {
+        dictionary->AddTransactionTypes(transaction_type);
+      }
     }
 
     // part with cooc dictionary
@@ -255,6 +270,7 @@ std::shared_ptr<Dictionary> DictionaryOperations::Gather(const GatherDictionaryA
 
   int total_items_count = 0;
   std::unordered_map<ClassId, float> sum_w_tf;
+  std::set<TransactionType> transaction_types;
   for (const std::string& batch_file : batches) {
     std::shared_ptr<Batch> batch_ptr = mem_batches.get(batch_file);
     try {
@@ -283,11 +299,25 @@ std::shared_ptr<Dictionary> DictionaryOperations::Gather(const GatherDictionaryA
       // (assume that token might have multiple occurence in each item)
       std::vector<bool> local_token_df(batch.token_size(), false);
       const Item& item = batch.item(item_id);
-      for (int token_index = 0; token_index < item.token_weight_size(); ++token_index) {
-        const float token_weight = item.token_weight(token_index);
-        const int token_id = item.token_id(token_index);
-        token_n_w[token_id] += token_weight;
-        local_token_df[token_id] = true;
+
+      for (int transaction_index = 0; transaction_index < item.token_weight_size(); ++transaction_index) {
+        const float token_weight = item.token_weight(transaction_index);
+
+        auto func = [&](int token_id) {  // NOLINT
+          token_n_w[token_id] += token_weight;
+          local_token_df[token_id] = true;
+        };
+
+        if (item.transaction_token_ids_size() == 0) {
+          func(item.token_id(transaction_index));
+        } else {
+          std::vector<ClassId> ptt;
+          for (const int token_id : item.transaction_token_ids(transaction_index).value()) {
+            func(token_id);
+            ptt.push_back(batch.class_id(token_id));
+          }
+          transaction_types.insert(ptt);
+        }
       }
       for (int i = 0; i < batch.token_size(); ++i) {
         token_df[i] += local_token_df[i] ? 1.0f : 0.0f;
@@ -302,6 +332,12 @@ std::shared_ptr<Dictionary> DictionaryOperations::Gather(const GatherDictionaryA
       token_info.token_df += token_df[index];
 
       sum_w_tf[token_class_id] += token_n_w[index];
+    }
+
+    for (const auto& tt : transaction_types) {
+      for (const ClassId class_id : tt) {
+        dictionary->AddTransactionType(class_id, tt);
+      }
     }
   }
 
@@ -559,6 +595,13 @@ void DictionaryOperations::StoreIntoDictionaryData(const Dictionary& dict, Dicti
     data->add_token_value(entries[i].token_value());
     data->add_token_tf(entries[i].token_tf());
     data->add_token_df(entries[i].token_df());
+  }
+
+  for (const auto& transaction_type : dict.GetAllTransactionTypes()) {
+    auto ptr = data->add_transaction_types();
+    for (const ClassId& class_id : transaction_type) {
+      ptr->add_value(class_id);
+    }
   }
 }
 
