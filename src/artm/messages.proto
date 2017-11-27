@@ -29,6 +29,7 @@ message Item {
   optional string title = 3;
   repeated int32 token_id = 4;
   repeated float token_weight = 5;
+  repeated IntArray transaction_token_ids = 6;
 }
 
 // Represents a field withing an item.

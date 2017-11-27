@@ -246,6 +246,11 @@ TEST(CollectionParser, VowpalWabbit) {
         }
       }
       ASSERT_EQ(batch.item_size(), 1);
+
+      ASSERT_EQ(batch.item(0).token_id_size(), 0);
+      ASSERT_GE(batch.item(0).transaction_token_ids_size(), 2);
+      ASSERT_EQ(batch.item(0).transaction_token_ids(0).value_size(), 1);
+      ASSERT_EQ(batch.item(0).transaction_token_ids(1).value_size(), 1);
     }
     ++it;
   }
@@ -254,5 +259,92 @@ TEST(CollectionParser, VowpalWabbit) {
 
   try { fs::remove_all(target_folder); }
   catch (...) { }
+}
+
+// To run this particular test:
+// artm_tests.exe --gtest_filter=CollectionParser.TransactionVowpalWabbit
+TEST(CollectionParser, TransactionVowpalWabbit) {
+  std::string target_folder = artm::test::Helpers::getUniqueString();
+
+  ::artm::CollectionParserConfig config;
+  config.set_format(::artm::CollectionParserConfig_CollectionFormat_VowpalWabbit);
+  config.set_target_folder(target_folder);
+  config.set_docword_file_path("../../../test_data/vw_transaction_data.txt");
+  config.set_num_items_per_batch(2);
+
+  ::artm::ParseCollection(config);
+
+  fs::recursive_directory_iterator it(target_folder);
+  fs::recursive_directory_iterator endit;
+  int batches_count = 0;
+  while (it != endit) {
+    if (fs::is_regular_file(*it) && it->path().extension() == ".batch") {
+      batches_count++;
+      ::artm::Batch batch;
+      ::artm::core::Helpers::LoadMessage(it->path().string(), &batch);
+
+      ASSERT_EQ(batch.class_id_size(), batch.token_size());
+      ASSERT_EQ(batch.class_id_size(), 8);
+
+      for (int i = 0; i < batch.token_size(); ++i) {
+        if (batch.token(i) == "hello" || batch.token(i) == "world") {
+          ASSERT_EQ(batch.class_id(i), "@default_class");
+        } else if (batch.token(i) == "click" || batch.token(i) == "show") {
+          ASSERT_EQ(batch.class_id(i), "action");
+        } else if (batch.token(i) == "twice" || batch.token(i) == "first") {
+          ASSERT_EQ(batch.class_id(i), "qualifier");
+        } else if (batch.token(i) == "mel-lain") {
+          ASSERT_TRUE(batch.class_id(i) == "user" || batch.class_id(i) == "author");
+        } else {
+          ASSERT_EQ(batch.token(i), "hello");  // we should not get here
+        }
+      }
+
+      ASSERT_EQ(batch.item_size(), 2);
+
+      ASSERT_EQ(batch.item(0).transaction_token_ids_size(), 4);
+      ASSERT_EQ(batch.item(1).transaction_token_ids_size(), 4);
+
+      // check first item
+      ASSERT_EQ(batch.item(0).transaction_token_ids(0).value_size(), 1);
+      ASSERT_FLOAT_EQ(batch.item(0).token_weight(0), 1.0);
+
+      ASSERT_EQ(batch.item(0).transaction_token_ids(1).value_size(), 1);
+      ASSERT_FLOAT_EQ(batch.item(0).token_weight(1), 2.0);
+
+      ASSERT_EQ(batch.item(0).transaction_token_ids(2).value_size(), 2);
+      ASSERT_FLOAT_EQ(batch.item(0).token_weight(2), 3.0);
+
+      ASSERT_EQ(batch.item(0).transaction_token_ids(3).value_size(), 2);
+      ASSERT_FLOAT_EQ(batch.item(0).token_weight(3), 1.0);
+
+      // both are ids of "mel-lain" as "user"
+      ASSERT_EQ(batch.item(0).transaction_token_ids(2).value(0),
+                batch.item(0).transaction_token_ids(3).value(0));
+
+      // check second item
+      ASSERT_EQ(batch.item(1).transaction_token_ids(0).value_size(), 1);
+      ASSERT_FLOAT_EQ(batch.item(1).token_weight(0), 1.0);
+
+      ASSERT_EQ(batch.item(1).transaction_token_ids(1).value_size(), 3);
+      ASSERT_FLOAT_EQ(batch.item(1).token_weight(1), 5.0);
+
+      ASSERT_EQ(batch.item(1).transaction_token_ids(2).value_size(), 3);
+      ASSERT_FLOAT_EQ(batch.item(1).token_weight(2), 1.0);
+
+      ASSERT_EQ(batch.item(1).transaction_token_ids(3).value_size(), 1);
+      ASSERT_FLOAT_EQ(batch.item(1).token_weight(3), 1.0);
+
+      // both are ids of "worls" as "@default_class"
+      ASSERT_EQ(batch.item(1).transaction_token_ids(2).value(0),
+                batch.item(1).transaction_token_ids(3).value(0));
+    }
+    ++it;
+  }
+
+  ASSERT_EQ(batches_count, 1);
+
+  try { fs::remove_all(target_folder); }
+  catch (...) {}
 }
 // vim: set ts=2 sw=2 sts=2:
