@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "artm/core/common.h"
 #include "artm/core/token.h"
@@ -11,8 +12,7 @@
 namespace artm {
 namespace core {
 
-// Phi matrix is an interface (abstract class without methods).
-// It represents a single-precision matrix with two dimentions (tokens and topics).
+// Phi matrix represents a single-precision matrix with two dimentions (tokens and topics).
 class PhiMatrix {
  public:
   static const int kUndefIndex = -1;
@@ -40,6 +40,36 @@ class PhiMatrix {
 
   virtual std::shared_ptr<PhiMatrix> Duplicate() const = 0;
   virtual ~PhiMatrix() { }
+
+  const TransactionType* GetTransactionByIndex(int index) const {
+    auto iter = index_to_transaction_type.find(index);
+    return iter == index_to_transaction_type.end() ? nullptr : &(iter->second);
+  }
+
+  int GetIndexByTransaction(const TransactionType& transaction_type) const {
+    auto iter = transaction_type_to_index.find(transaction_type);
+    return iter == transaction_type_to_index.end() ? NoSuchTransactionType : iter->second;
+  }
+
+  int AddTransactionType(const TransactionType& transaction_type) {
+    auto iter = transaction_type_to_index.find(transaction_type);
+    if (iter == transaction_type_to_index.end()) {
+      int index = transaction_type_to_index.size();
+      transaction_type_to_index.insert(std::make_pair(transaction_type, index));
+      index_to_transaction_type.insert(std::make_pair(index, transaction_type));
+
+      return index;
+    }
+    return iter->second;
+  }
+
+  const std::unordered_map<int, TransactionType>& GetIndexToTransactionType() const {
+    return index_to_transaction_type;
+  }
+
+ private:
+   std::unordered_map<int, TransactionType> index_to_transaction_type;
+   std::unordered_map<TransactionType, int, TransactionTypeHasher> transaction_type_to_index;
 };
 
 }  // namespace core

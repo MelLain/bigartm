@@ -115,7 +115,7 @@ std::vector<float> Helpers::GenerateRandomVector(int size, const Token& token, i
   }
 
   if (seed > 0) {
-    h = 31 * h + seed;
+    h = 31 * h + seed + (token.transaction_id > 0 ? token.transaction_id : 0);
   }
 
   return GenerateRandomVector(size, h);

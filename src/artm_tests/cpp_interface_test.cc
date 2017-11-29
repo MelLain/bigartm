@@ -37,6 +37,26 @@ void RunBasicTest(bool serialize_as_json) {
     ArtmSetProtobufMessageFormatToBinary();
   }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   artm::ConfigureLoggingArgs log_args;
   log_args.set_minloglevel(2);
   artm::ConfigureLogging(log_args);
@@ -278,6 +298,22 @@ void RunBasicTest(bool serialize_as_json) {
   try { boost::filesystem::remove_all(target_path); }
   catch (...) { }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // artm_tests.exe --gtest_filter=CppInterface.BasicTest
 TEST(CppInterface, BasicTest) {

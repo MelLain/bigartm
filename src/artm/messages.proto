@@ -446,6 +446,9 @@ message TopicModel {
   repeated string class_id = 6;
   repeated IntArray topic_indices = 8;
   optional int64 num_values = 9;  // NNZ for sparse retrieval
+
+  repeated StringArray all_transaction_types = 10;
+  repeated int32 token_transaction_type_index = 11;  // index from all_transaction_types field
 }
 
 // Represents a theta matrix.
@@ -561,6 +564,9 @@ message GetTopicModelArgs {
   optional bool use_sparse_format = 5;  // deprecated, use matrix_layout
   optional float eps = 6 [default = 1e-37];
   optional MatrixLayout matrix_layout = 8 [default = MatrixLayout_Dense];
+
+  repeated StringArray all_transaction_types = 9;
+  repeated int32 token_transaction_type_index = 10;  // index from all_transaction_types field
 }
 
 message GetThetaMatrixArgs {
@@ -741,6 +747,8 @@ message MasterModelConfig {
   optional string disk_cache_path = 13;
   optional bool cache_theta = 15 [default = false];
   optional string ptd_name = 16 [default = ""];
+  repeated StringArray transaction_types = 17;
+  repeated float transaction_weight = 18;
 }
 
 message FitOfflineMasterModelArgs {

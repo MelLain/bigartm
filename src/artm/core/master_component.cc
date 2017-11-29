@@ -558,6 +558,7 @@ void MasterComponent::InitializeModel(const InitializeModelArgs& args) {
 
   std::shared_ptr<PhiMatrix> new_ttm;
   int excluded_tokens = 0;
+  int included_tokens = 0;
   if (args.has_dictionary_name()) {
     auto dict = instance_->dictionaries()->get(args.dictionary_name());
     if (dict == nullptr) {
@@ -572,19 +573,42 @@ void MasterComponent::InitializeModel(const InitializeModelArgs& args) {
       BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
     }
 
+    bool use_transactions = dict->ContainsTransactions();
+    std::set<ClassId> excluded_class_ids;
+
     new_ttm = std::make_shared< ::artm::core::DensePhiMatrix>(args.model_name(), args.topic_name());
     for (int index = 0; index < (int64_t) dict->size(); ++index) {
       ::artm::core::Token token = dict->entry(index)->token();
-      if (config->class_id_size() > 0 && !is_member(token.class_id, config->class_id())) {
+      auto transactions = dict->GetTransactionTypes(token.class_id);
+
+      if ((config->class_id_size() > 0 && !is_member(token.class_id, config->class_id())) ||
+          (use_transactions && transactions == nullptr)) {
+        excluded_class_ids.insert(token.class_id);
         continue;
       }
-      new_ttm->AddToken(token);
+
+      ++included_tokens;
+      if (!use_transactions) {
+        new_ttm->AddToken(token);
+        continue;
+      }
+
+      for (const auto& t : *transactions) {
+        int idx = new_ttm->AddTransactionType(t);
+        new_ttm->AddToken(Token(token.class_id, token.keyword, idx));
+      }
     }
 
-    excluded_tokens = dict->size() - new_ttm->token_size();
-    LOG_IF(INFO, excluded_tokens > 0)
-      << excluded_tokens
-      << " tokens were present in the dictionary, but excluded from the model";
+    excluded_tokens = dict->size() - included_tokens;
+    std::stringstream ss;
+    ss << excluded_tokens
+       << " tokens were present in the dictionary, but excluded from the model,"
+       << " excluded class_ids: ";
+    for (const ClassId& class_id : excluded_class_ids) {
+      ss << class_id << " ";
+    }
+
+    LOG_IF(INFO, excluded_tokens > 0) << ss.str();
 
   } else {
     // Initialize without dictionary from an existing model

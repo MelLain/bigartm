@@ -38,7 +38,9 @@ bool NetPlsaPhi::RegularizePhi(const ::artm::core::PhiMatrix& p_wt,
   }
 
   auto normalizers = artm::core::PhiMatrixOperations::FindNormalizers(n_wt);
-  auto norm_iter = normalizers.find(class_id);
+
+  // ToDo(MelLain): change this stub in future commits
+  auto norm_iter = normalizers.find({ class_id, artm::core::NoAnyTransactionType });
   if (norm_iter == normalizers.end()) {
     LOG(ERROR) << "NetPlsaPhiConfig.class_id " << class_id
                << " does not exists in n_wt matrix. Cancel regularization.";
