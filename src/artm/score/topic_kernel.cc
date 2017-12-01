@@ -9,6 +9,7 @@
 #include "artm/core/exceptions.h"
 #include "artm/core/phi_matrix_operations.h"
 #include "artm/core/protobuf_helpers.h"
+#include "artm/core/token.h"
 
 #include "artm/score/topic_kernel.h"
 
@@ -74,7 +75,9 @@ std::shared_ptr<Score> TopicKernel::CalculateScore(const artm::core::PhiMatrix& 
 
   const auto& n_wt = GetPhiMatrix(instance_->config()->nwt_name());
   auto normalizers = artm::core::PhiMatrixOperations::FindNormalizers(*n_wt);
-  auto norm_iter = normalizers.find(class_id);
+
+  // ToDo(MelLain): STUB ONLY (TransactionType({ class_id }))
+  auto norm_iter = normalizers.find(artm::core::NormalizerKey(class_id, artm::core::TransactionType({ class_id })));
   if (norm_iter == normalizers.end()) {
     BOOST_THROW_EXCEPTION(artm::core::InvalidOperation(
         "TopicKernelScoreConfig.class_id " + class_id + " does not exists in n_wt matrix"));

@@ -375,6 +375,10 @@ void MasterComponent::ExportModel(const ExportModelArgs& args) {
     Token token = n_wt.token(token_id);
     get_topic_model_args.add_token(token.keyword);
     get_topic_model_args.add_class_id(token.class_id);
+    auto ptr = get_topic_model_args.add_transaction_type();
+    for (const ClassId& class_id : token.transaction_type.AsVector()) {
+      ptr->add_value(class_id);
+    }
 
     if (((token_id + 1) == token_size) || (get_topic_model_args.token_size() >= tokens_per_chunk)) {
       ::artm::TopicModel external_topic_model;
@@ -415,7 +419,7 @@ void MasterComponent::ImportModel(const ImportModelArgs& args) {
     BOOST_THROW_EXCEPTION(DiskReadException(ss.str()));
   }
 
-  std::shared_ptr<DensePhiMatrix> target;
+  std::shared_ptr<DensePhiMatrix> target = nullptr;
   while (!fin.eof()) {
     int length;
     fin >> length;
@@ -437,10 +441,7 @@ void MasterComponent::ImportModel(const ImportModelArgs& args) {
     }
 
     topic_model.set_name(args.model_name());
-
-    if (target == nullptr) {
-      target = std::make_shared<DensePhiMatrix>(args.model_name(), topic_model.topic_name());
-    }
+    target = std::make_shared<DensePhiMatrix>(args.model_name(), topic_model.topic_name());
 
     PhiMatrixOperations::ApplyTopicModelOperation(topic_model, 1.0f, /* add_missing_tokens = */ true, target.get());
   }

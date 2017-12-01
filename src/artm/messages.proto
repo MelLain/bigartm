@@ -564,6 +564,9 @@ message GetTopicModelArgs {
   optional bool use_sparse_format = 5;  // deprecated, use matrix_layout
   optional float eps = 6 [default = 1e-37];
   optional MatrixLayout matrix_layout = 8 [default = MatrixLayout_Dense];
+  
+  // field with length equal to 'token' (if length of 'token' > 0)
+  repeated StringArray transaction_type = 9;
 }
 
 message GetThetaMatrixArgs {

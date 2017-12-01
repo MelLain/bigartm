@@ -13,6 +13,7 @@
 #include "artm/core/exceptions.h"
 #include "artm/core/common.h"
 #include "artm/core/protobuf_helpers.h"
+#include "artm/core/phi_matrix_operations.h"
 
 #include "artm/core/helpers.h"
 
@@ -290,6 +291,161 @@ TEST(CppInterface, BasicTestJson) {
   bool wasJson = ArtmProtobufMessageFormatIsJson();
   RunBasicTest(true);
   wasJson ? ArtmSetProtobufMessageFormatToJson() : ArtmSetProtobufMessageFormatToBinary();
+}
+
+// artm_tests.exe --gtest_filter=CppInterface.BasicTrasactionTest
+TEST(CppInterface, BasicTrasactionTest) {
+  std::string target_folder = artm::test::Helpers::getUniqueString();
+  try {
+    ::artm::MasterModelConfig master_config;
+    master_config.set_cache_theta(true);
+    master_config.set_disk_cache_path(".");
+    master_config.set_pwt_name("pwt");
+
+    int nTopics = 5;
+    for (int i = 0; i < nTopics; ++i) {
+      std::stringstream ss;
+      ss << "topic_" << i;
+      master_config.add_topic_name(ss.str());
+    }
+
+    // Create master component
+    artm::MasterModel master_component(master_config);
+    ::artm::test::Api api(master_component);
+
+    ::artm::CollectionParserConfig config;
+    config.set_format(::artm::CollectionParserConfig_CollectionFormat_VowpalWabbit);
+    config.set_target_folder(target_folder);
+    config.set_docword_file_path("../../../test_data/vw_transaction_data_extended.txt");
+    config.set_num_items_per_batch(2);
+
+    ::artm::ParseCollection(config);
+
+    // Test InitializeModel and model extraction
+    artm::GatherDictionaryArgs dict_args;
+    dict_args.add_batch_path(target_folder);
+    dict_args.set_dictionary_target_name("dict");
+    dict_args.set_data_path(target_folder);
+    master_component.GatherDictionary(dict_args);
+
+    ::artm::InitializeModelArgs init_model_args;
+    init_model_args.set_model_name("model");
+    init_model_args.set_dictionary_name(dict_args.dictionary_target_name());
+    init_model_args.mutable_topic_name()->CopyFrom(master_component.config().topic_name());
+    master_component.InitializeModel(init_model_args);
+
+    auto test_func = [](artm::MasterModel& master_component, const artm::InitializeModelArgs& init_model_args) {
+      auto func = [](const artm::TopicModel& model, int num_transactions) {
+        std::unordered_map<artm::core::NormalizerKey, float, artm::core::NormalizerKeyHasher> normalizer_keys;
+        for (int i = 0; i < model.token_size(); ++i) {
+          float value = model.token_weights(i).value(0);
+          normalizer_keys[artm::core::NormalizerKey(model.class_id(i),
+            artm::core::TransactionType(model.transaction_type(i).value()))] += value;
+        }
+
+        ASSERT_EQ(normalizer_keys.size(), num_transactions);
+        for (const auto& nk : normalizer_keys) {
+          ASSERT_FLOAT_EQ(nk.second, 1.0);
+        }
+      };
+
+      artm::GetTopicModelArgs args;
+      args.set_model_name(init_model_args.model_name());
+      auto model_1 = master_component.GetTopicModel(args);
+
+      ASSERT_EQ(model_1.transaction_type_size(), model_1.token_size());
+      func(model_1, 7);
+
+      args.set_model_name(init_model_args.model_name());
+      auto ptr = args.add_transaction_type();
+      ptr->add_value("class_1");
+      ptr->add_value("class_2");
+      auto model_2 = master_component.GetTopicModel(args);
+      func(model_2, 2);
+
+      args.set_model_name(init_model_args.model_name());
+      ptr = args.add_transaction_type();
+      ptr->add_value("class_1");
+      ptr->add_value("class_2");
+      args.add_class_id("class_1");
+      auto model_3 = master_component.GetTopicModel(args);
+      func(model_3, 1);
+    };
+
+    test_func(master_component, init_model_args);
+
+    artm::ExportModelArgs exp_args;
+    fs::path export_filename = (fs::path(target_folder) / fs::path(artm::test::Helpers::getUniqueString() + ".model"));
+    exp_args.set_file_name(export_filename.string());
+    exp_args.set_model_name(init_model_args.model_name());
+    master_component.ExportModel(exp_args);
+
+    artm::ImportModelArgs imp_args;
+    imp_args.set_file_name(exp_args.file_name());
+    imp_args.set_model_name(init_model_args.model_name());
+    master_component.ImportModel(imp_args);
+
+    test_func(master_component, init_model_args);
+
+    artm::TopicModel new_topic_model;
+    new_topic_model.set_name("model2_name");
+    new_topic_model.mutable_topic_name()->CopyFrom(master_component.config().topic_name());
+
+    new_topic_model.add_token("token_x");
+    new_topic_model.add_class_id("class_5");
+    auto ptr = new_topic_model.add_transaction_type();
+    ptr->add_value("class_5");
+
+    new_topic_model.add_token("token_y");
+    new_topic_model.add_class_id("class_5");
+    ptr = new_topic_model.add_transaction_type();
+    ptr->add_value("class_5");
+
+    auto weights = new_topic_model.add_token_weights();
+    auto weights2 = new_topic_model.add_token_weights();
+    for (int i = 0; i < nTopics; ++i) {
+      weights->add_value(static_cast<float>(i));
+      weights2->add_value(static_cast<float>(nTopics - i));
+    }
+    api.OverwriteModel(new_topic_model);
+
+    ::artm::NormalizeModelArgs normalize_args;
+    normalize_args.set_nwt_source_name(new_topic_model.name());
+    normalize_args.set_pwt_target_name(new_topic_model.name());
+    api.NormalizeModel(normalize_args);
+
+    {
+      artm::GetTopicModelArgs args;
+      args.set_model_name(new_topic_model.name());
+      new_topic_model.add_token("token_x");
+      new_topic_model.add_class_id("class_5");
+      auto ptr = new_topic_model.add_transaction_type();
+      ptr->add_value("class_5");
+
+      new_topic_model.add_token("token_y");
+      new_topic_model.add_class_id("class_5");
+      ptr = new_topic_model.add_transaction_type();
+      ptr->add_value("class_5");
+
+      auto new_topic_model2 = master_component.GetTopicModel(args);
+
+      ASSERT_EQ(new_topic_model2.token_size(), 2);
+      EXPECT_EQ(new_topic_model2.token(0), "token_x");
+      EXPECT_EQ(new_topic_model2.token(1), "token_y");
+      for (int i = 0; i < nTopics; ++i) {
+        EXPECT_FLOAT_EQ(
+          new_topic_model2.token_weights(0).value(i),
+          static_cast<float>(i) / static_cast<float>(nTopics));
+          EXPECT_FLOAT_EQ(
+            new_topic_model2.token_weights(1).value(i),
+            1.0f - static_cast<float>(i) / static_cast<float>(nTopics));
+      }
+    }
+  }
+  catch (...) {
+    try { boost::filesystem::remove_all(target_folder); }
+    catch (...) {}
+  }
 }
 
 // artm_tests.exe --gtest_filter=CppInterface.ProcessBatchesApi

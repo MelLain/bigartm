@@ -5,6 +5,8 @@
 #include "artm/core/protobuf_helpers.h"
 #include "artm/core/phi_matrix.h"
 #include "artm/core/phi_matrix_operations.h"
+#include "artm/core/token.h"
+
 #include "artm/regularizer/net_plsa_phi.h"
 
 namespace artm {
@@ -38,7 +40,9 @@ bool NetPlsaPhi::RegularizePhi(const ::artm::core::PhiMatrix& p_wt,
   }
 
   auto normalizers = artm::core::PhiMatrixOperations::FindNormalizers(n_wt);
-  auto norm_iter = normalizers.find(class_id);
+
+  // ToDo(MelLain): STUB ONLY (TransactionType({ class_id }))
+  auto norm_iter = normalizers.find(artm::core::NormalizerKey(class_id, artm::core::TransactionType({ class_id })));
   if (norm_iter == normalizers.end()) {
     LOG(ERROR) << "NetPlsaPhiConfig.class_id " << class_id
                << " does not exists in n_wt matrix. Cancel regularization.";

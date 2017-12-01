@@ -27,11 +27,22 @@ class TransactionType {
     data_.clear();
     std::stringstream ss;
     for (int i = 0; i < src.size(); ++i) {
-      if (i == 0) {
-        ss << src[i];
-      } else {
-        ss << TransactionSeparator << src[i];
+      if (i > 0) {
+        ss << TransactionSeparator;
       }
+      ss << src[i];
+    }
+    data_ = ss.str();
+  }
+
+  explicit TransactionType(const google::protobuf::RepeatedPtrField<std::string>& src) {
+    data_.clear();
+    std::stringstream ss;
+    for (int i = 0; i < src.size(); ++i) {
+      if (i > 0) {
+        ss << TransactionSeparator;
+      }
+      ss << src.Get(i);
     }
     data_ = ss.str();
   }
@@ -99,6 +110,8 @@ struct Token {
   bool operator!=(const Token& token) const {
     return !(*this == token);
   }
+
+  size_t hash() const { return hash_; }
 
   const std::string keyword;
   const ClassId class_id;

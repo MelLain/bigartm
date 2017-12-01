@@ -36,6 +36,7 @@ inline std::string DescribeErrors(const ::artm::TopicModel& message) {
 
   const bool has_topic_data = (message.num_topics() != 0 || message.topic_name_size() != 0);
   const bool has_token_data = (message.class_id_size() != 0 || message.token_size() != 0);
+  const bool has_transaction_data = (message.transaction_type_size() != 0);
   const bool has_bulk_data = (message.token_weights_size() != 0);
   const bool has_sparse_format = has_bulk_data && (message.topic_indices_size() != 0);
 
@@ -49,6 +50,13 @@ inline std::string DescribeErrors(const ::artm::TopicModel& message) {
     if (message.class_id_size() != message.token_size()) {
       ss << "Inconsistent fields size in TopicModel.token and TopicModel.class_id: "
          << message.token_size() << " vs " << message.class_id_size();
+    }
+
+    if (has_transaction_data) {
+      if (message.transaction_type_size() != message.token_size()) {
+        ss << "Inconsistent fields size in TopicModel.token and TopicModel.transaction_type: "
+          << message.token_size() << " vs " << message.transaction_type_size();
+      }
     }
   }
 
