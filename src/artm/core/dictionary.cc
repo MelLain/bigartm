@@ -228,7 +228,7 @@ void Dictionary::AddTransactionType(const ClassId& class_id, const TransactionTy
   transaction_type_[class_id].insert(transaction_type);
 }
 
-void Dictionary::AddTransactionTypes(const artm::StringArray& transaction_types) {
+void Dictionary::AddTransactionType(const artm::StringArray& transaction_types) {
   TransactionType tt;
   for (const ClassId& class_id : transaction_types.value()) {
     tt.push_back(class_id);

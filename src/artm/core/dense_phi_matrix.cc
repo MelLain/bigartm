@@ -144,6 +144,39 @@ int PhiMatrixFrame::token_index(const Token& token) const {
 void PhiMatrixFrame::Clear() {
   token_collection_.Clear();
   spin_locks_.clear();
+  index_to_transaction_type.clear();
+  transaction_type_to_index.clear();
+}
+
+const TransactionType* PhiMatrixFrame::GetTransactionByIndex(int index) const {
+  auto iter = index_to_transaction_type.find(index);
+  return iter == index_to_transaction_type.end() ? nullptr : &(iter->second);
+}
+
+int PhiMatrixFrame::GetIndexByTransaction(const TransactionType& transaction_type) const {
+  auto iter = transaction_type_to_index.find(transaction_type);
+  return iter == transaction_type_to_index.end() ? NoSuchTransactionType : iter->second;
+}
+
+int PhiMatrixFrame::GetOrAddTransactionType(const TransactionType& transaction_type) {
+  auto iter = transaction_type_to_index.find(transaction_type);
+  if (iter == transaction_type_to_index.end()) {
+    int index = transaction_type_to_index.size();
+    transaction_type_to_index.insert(std::make_pair(transaction_type, index));
+    index_to_transaction_type.insert(std::make_pair(index, transaction_type));
+
+    return index;
+  }
+  return iter->second;
+}
+
+void PhiMatrixFrame::Reshape(const PhiMatrix& phi_matrix) {
+  Clear();
+  for (int token_id = 0; token_id < phi_matrix.token_size(); ++token_id) {
+    this->AddToken(phi_matrix.token(token_id));
+  }
+  index_to_transaction_type = phi_matrix.GetIndexToTransactionType();
+  transaction_type_to_index = phi_matrix.GetTransactionTypeToIndex();
 }
 
 int PhiMatrixFrame::AddToken(const Token& token) {
@@ -383,13 +416,6 @@ int DensePhiMatrix::AddToken(const Token& token) {
 void DensePhiMatrix::Reset() {
   for (PackedValues& value : values_) {
     value.reset(topic_size());
-  }
-}
-
-void DensePhiMatrix::Reshape(const PhiMatrix& phi_matrix) {
-  Clear();
-  for (int token_id = 0; token_id < phi_matrix.token_size(); ++token_id) {
-    this->AddToken(phi_matrix.token(token_id));
   }
 }
 

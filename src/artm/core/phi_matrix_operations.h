@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <string>
 
 #include "artm/core/common.h"
 #include "artm/core/phi_matrix.h"
@@ -29,7 +30,7 @@ struct NormalizerKey {
   const ClassId& class_id() const { return token_.class_id; }
   int transaction_id() const { return token_.transaction_id; }
 
-private:
+ private:
   friend struct NormalizerKeyHasher;
   Token token_;;
 };
@@ -51,8 +52,10 @@ class PhiMatrixOperations {
     ::artm::TopicModel* topic_model);
 
   // Apply protobuf message 'topic_model' to phi_matrix
+  // IMPORTANT: topic_model and phi_matrix should be consistent in transaction policy (both use it or not)
   static void ApplyTopicModelOperation(
-    const ::artm::TopicModel& topic_model, float apply_weight, bool add_missing_tokens, PhiMatrix* phi_matrix);
+    const ::artm::TopicModel& topic_model, float apply_weight, bool add_missing_tokens,
+    PhiMatrix* phi_matrix, bool check_transaction_consistency = true);
 
   // Calculate phi matrix regularizers (r_wt)
   static void InvokePhiRegularizers(

@@ -12,7 +12,8 @@
 namespace artm {
 namespace core {
 
-// Phi matrix represents a single-precision matrix with two dimentions (tokens and topics).
+// Phi matrix is an interface (abstract class without methods).
+// It represents a single-precision matrix with two dimentions (tokens and topics).
 class PhiMatrix {
  public:
   static const int kUndefIndex = -1;
@@ -38,38 +39,20 @@ class PhiMatrix {
   virtual void Clear() = 0;
   virtual int AddToken(const Token& token) = 0;
 
+  virtual const TransactionType* GetTransactionByIndex(int index) const = 0;
+  virtual int GetIndexByTransaction(const TransactionType& transaction_type) const = 0;
+  virtual int GetOrAddTransactionType(const TransactionType& transaction_type) = 0;
+
+  virtual const std::unordered_map<int, TransactionType>& GetIndexToTransactionType() const = 0;
+  virtual const std::unordered_map<TransactionType, int, TransactionTypeHasher>&
+  GetTransactionTypeToIndex() const = 0;
+
+  virtual bool UseTransactions() const = 0;
+
+  virtual void Reshape(const PhiMatrix& phi_matrix) = 0;
+
   virtual std::shared_ptr<PhiMatrix> Duplicate() const = 0;
   virtual ~PhiMatrix() { }
-
-  const TransactionType* GetTransactionByIndex(int index) const {
-    auto iter = index_to_transaction_type.find(index);
-    return iter == index_to_transaction_type.end() ? nullptr : &(iter->second);
-  }
-
-  int GetIndexByTransaction(const TransactionType& transaction_type) const {
-    auto iter = transaction_type_to_index.find(transaction_type);
-    return iter == transaction_type_to_index.end() ? NoSuchTransactionType : iter->second;
-  }
-
-  int AddTransactionType(const TransactionType& transaction_type) {
-    auto iter = transaction_type_to_index.find(transaction_type);
-    if (iter == transaction_type_to_index.end()) {
-      int index = transaction_type_to_index.size();
-      transaction_type_to_index.insert(std::make_pair(transaction_type, index));
-      index_to_transaction_type.insert(std::make_pair(index, transaction_type));
-
-      return index;
-    }
-    return iter->second;
-  }
-
-  const std::unordered_map<int, TransactionType>& GetIndexToTransactionType() const {
-    return index_to_transaction_type;
-  }
-
- private:
-   std::unordered_map<int, TransactionType> index_to_transaction_type;
-   std::unordered_map<TransactionType, int, TransactionTypeHasher> transaction_type_to_index;
 };
 
 }  // namespace core

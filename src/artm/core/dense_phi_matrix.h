@@ -73,7 +73,7 @@ class PhiMatrixFrame : public PhiMatrix {
   virtual ModelName model_name() const;
   virtual int64_t ByteSize() const;
 
-  void Clear();
+  virtual void Clear();
   virtual int AddToken(const Token& token);
 
   void Lock(int token_id) { spin_locks_[token_id]->Lock(); }
@@ -82,7 +82,23 @@ class PhiMatrixFrame : public PhiMatrix {
   void Swap(PhiMatrixFrame* rhs);
 
   PhiMatrixFrame(const PhiMatrixFrame& rhs);
-  PhiMatrixFrame& operator=(const PhiMatrixFrame&);
+
+  virtual const TransactionType* GetTransactionByIndex(int index) const;
+  virtual int GetIndexByTransaction(const TransactionType& transaction_type) const;
+  virtual int GetOrAddTransactionType(const TransactionType& transaction_type);
+
+  virtual const std::unordered_map<int, TransactionType>& GetIndexToTransactionType() const {
+    return index_to_transaction_type;
+  }
+
+  virtual const std::unordered_map<TransactionType, int, TransactionTypeHasher>&
+  GetTransactionTypeToIndex() const {
+    return transaction_type_to_index;
+  }
+
+  virtual bool UseTransactions() const { return index_to_transaction_type.size() > 0; }
+
+  void Reshape(const PhiMatrix& phi_matrix);
 
  private:
   ModelName model_name_;
@@ -90,6 +106,9 @@ class PhiMatrixFrame : public PhiMatrix {
 
   TokenCollection token_collection_;
   std::vector<std::shared_ptr<SpinLock> > spin_locks_;
+
+  std::unordered_map<int, TransactionType> index_to_transaction_type;
+  std::unordered_map<TransactionType, int, TransactionTypeHasher> transaction_type_to_index;
 };
 
 class DensePhiMatrix;
@@ -140,7 +159,6 @@ class DensePhiMatrix : public PhiMatrixFrame {
   virtual int AddToken(const Token& token);
 
   void Reset();
-  void Reshape(const PhiMatrix& phi_matrix);
 
  private:
   friend class AttachedPhiMatrix;

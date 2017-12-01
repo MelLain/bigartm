@@ -41,7 +41,7 @@ std::shared_ptr<Dictionary> DictionaryOperations::Create(const DictionaryData& d
         has_token_df ? data.token_df(index) : 0.0f));
     }
     for (const auto& transaction_type : data.transaction_types()) {
-        dictionary->AddTransactionTypes(transaction_type);
+        dictionary->AddTransactionType(transaction_type);
     }
   } else {
     LOG(ERROR) << "Can't create Dictionary using the cooc part of DictionaryData";
@@ -214,7 +214,7 @@ std::shared_ptr<Dictionary> DictionaryOperations::Import(const ImportDictionaryA
       }
 
       for (const auto& transaction_type : dict_data.transaction_types()) {
-        dictionary->AddTransactionTypes(transaction_type);
+        dictionary->AddTransactionType(transaction_type);
       }
     }
 

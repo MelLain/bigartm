@@ -70,7 +70,7 @@ class Dictionary {
   bool HasToken(const Token& token) const { return token_index_.find(token) != token_index_.end(); }
 
   void AddTransactionType(const ClassId& class_id, const TransactionType& transaction_type);
-  void AddTransactionTypes(const artm::StringArray& transaction_types);
+  void AddTransactionType(const artm::StringArray& transaction_types);
 
   // SECTION OF GETTERS
   // general method to return all cooc tokens with their values for given token

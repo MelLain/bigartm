@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <utility>
 #include <string>
+#include <set>
 
 #include "boost/range/adaptor/map.hpp"
 #include "boost/range/algorithm/copy.hpp"
@@ -200,7 +201,7 @@ void PhiMatrixOperations::RetrieveExternalTopicModel(const PhiMatrix& phi_matrix
 
 void PhiMatrixOperations::ApplyTopicModelOperation(const ::artm::TopicModel& topic_model,
                                                    float apply_weight, bool add_missing_tokens,
-                                                   PhiMatrix* phi_matrix) {
+                                                   PhiMatrix* phi_matrix, bool check_transaction_consistency) {
   if (!ValidateMessage(topic_model, /* throw_error=*/ false)) {
     return;
   }
@@ -251,6 +252,16 @@ void PhiMatrixOperations::ApplyTopicModelOperation(const ::artm::TopicModel& top
     index_to_tt.insert(std::make_pair(i, tt));
   }
 
+  if (check_transaction_consistency &&
+      (phi_matrix->UseTransactions() && index_to_tt.empty() ||
+      !phi_matrix->UseTransactions() && !index_to_tt.empty())) {
+    std::stringstream ss;
+    ss << "topic_model and phi_matrix should both use transactions or not"
+       << " topic_model uses transactions: " << !index_to_tt.empty()
+       << " phi_matrix uses transactions : " << phi_matrix->UseTransactions();
+    BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
+  }
+
   for (int token_index = 0; token_index < topic_model.token_size(); ++token_index) {
     const std::string& token_keyword = topic_model.token(token_index);
     const ClassId& class_id = topic_model.class_id(token_index);
@@ -261,7 +272,8 @@ void PhiMatrixOperations::ApplyTopicModelOperation(const ::artm::TopicModel& top
       if (iter == index_to_tt.end()) {
         continue;
       }
-      transaction_id = phi_matrix->GetIndexByTransaction(iter->second);
+
+      transaction_id = phi_matrix->GetOrAddTransactionType(iter->second);
     }
     Token token(class_id, token_keyword, transaction_id);
 
@@ -355,7 +367,6 @@ void PhiMatrixOperations::InvokePhiRegularizers(
             class_ids.push_back(class_id);
           }
         } else {
-
           // ToDo(MelLain): change this stub in future commits
           for (const auto& key : n_t_all) {
             class_ids.push_back(key.first.class_id());
@@ -369,7 +380,6 @@ void PhiMatrixOperations::InvokePhiRegularizers(
         }
 
         for (const auto& class_id : class_ids) {
-
           // ToDo(MelLain): change this stub in future commits
           auto iter = n_t_all.find({ class_id, NoAnyTransactionType });
           if (iter != n_t_all.end()) {
@@ -387,7 +397,6 @@ void PhiMatrixOperations::InvokePhiRegularizers(
 
               float r_it_current = 0.0f;
               for (int token_id = 0; token_id < token_size; ++token_id) {
-
                 // ToDo(MelLain): change this stub in future commits (iter->first.class_id())
                 if (n_wt.token(token_id).class_id != iter->first.class_id()) {
                   continue;

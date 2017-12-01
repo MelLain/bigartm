@@ -369,10 +369,40 @@ void MasterComponent::ExportModel(const ExportModelArgs& args) {
   get_topic_model_args.mutable_token()->Reserve(tokens_per_chunk);
   get_topic_model_args.mutable_class_id()->Reserve(tokens_per_chunk);
 
+  std::unordered_map<int, int> nwt_index_to_tm_index;
+  if (n_wt.UseTransactions()) {
+    for (const auto& elem : n_wt.GetTransactionTypeToIndex()) {
+      auto ptr = get_topic_model_args.add_all_transaction_types();
+      nwt_index_to_tm_index.insert(std::make_pair(elem.second,
+                                                  get_topic_model_args.all_transaction_types_size() - 1));
+      for (const ClassId& class_id : elem.first) {
+        ptr->add_value(class_id);
+      }
+    }
+
+    get_topic_model_args.mutable_token_transaction_type_index()->Reserve(tokens_per_chunk);
+  }
+
   const char version = 0;
   fout << version;
   for (int token_id = 0; token_id < token_size; ++token_id) {
     Token token = n_wt.token(token_id);
+
+    if (n_wt.UseTransactions()) {
+      if (token.transaction_id == NoAnyTransactionType) {
+        LOG(ERROR) << "Transaction model contains tokens with NoAnyTransactionType";
+        continue;
+      }
+
+      auto iter = nwt_index_to_tm_index.find(token.transaction_id);
+      if (iter == nwt_index_to_tm_index.end()) {
+        LOG(ERROR) << "Transaction model contains tokens with unknown transaction type";
+        continue;
+      }
+
+      get_topic_model_args.add_token_transaction_type_index(iter->second);
+    }
+
     get_topic_model_args.add_token(token.keyword);
     get_topic_model_args.add_class_id(token.class_id);
 
@@ -415,7 +445,7 @@ void MasterComponent::ImportModel(const ImportModelArgs& args) {
     BOOST_THROW_EXCEPTION(DiskReadException(ss.str()));
   }
 
-  std::shared_ptr<DensePhiMatrix> target;
+  std::shared_ptr<DensePhiMatrix> target = nullptr;
   while (!fin.eof()) {
     int length;
     fin >> length;
@@ -438,11 +468,9 @@ void MasterComponent::ImportModel(const ImportModelArgs& args) {
 
     topic_model.set_name(args.model_name());
 
-    if (target == nullptr) {
-      target = std::make_shared<DensePhiMatrix>(args.model_name(), topic_model.topic_name());
-    }
-
-    PhiMatrixOperations::ApplyTopicModelOperation(topic_model, 1.0f, /* add_missing_tokens = */ true, target.get());
+    target = std::make_shared<DensePhiMatrix>(args.model_name(), topic_model.topic_name());
+    PhiMatrixOperations::ApplyTopicModelOperation(topic_model, 1.0f, /* add_missing_tokens = */ true,
+                                                  target.get(), /* check_transaction_consistency = */ false);
   }
 
   fin.close();
@@ -594,7 +622,7 @@ void MasterComponent::InitializeModel(const InitializeModelArgs& args) {
       }
 
       for (const auto& t : *transactions) {
-        int idx = new_ttm->AddTransactionType(t);
+        int idx = new_ttm->GetOrAddTransactionType(t);
         new_ttm->AddToken(Token(token.class_id, token.keyword, idx));
       }
     }
@@ -986,6 +1014,7 @@ void MasterComponent::NormalizeModel(const NormalizeModelArgs& normalize_model_a
   }
 
   std::shared_ptr<const PhiMatrix> nwt_phi_matrix = instance_->GetPhiMatrixSafe(nwt_source_name);
+
   const PhiMatrix& n_wt = *nwt_phi_matrix;
 
   std::shared_ptr<const PhiMatrix> rwt_phi_matrix;
@@ -1000,6 +1029,7 @@ void MasterComponent::NormalizeModel(const NormalizeModelArgs& normalize_model_a
   } else {
     PhiMatrixOperations::FindPwt(n_wt, *rwt_phi_matrix, pwt_target.get());
   }
+
   instance_->SetPhiMatrix(pwt_target_name, pwt_target);
   VLOG(0) << "MasterComponent: complete normalizing model " << normalize_model_args.nwt_source_name();
 }
@@ -1011,7 +1041,8 @@ void MasterComponent::OverwriteTopicModel(const ::artm::TopicModel& args) {
   }
 
   auto target = std::make_shared<DensePhiMatrix>(args.name(), args.topic_name());
-  PhiMatrixOperations::ApplyTopicModelOperation(args, 1.0f, /* add_missing_tokens = */ true, target.get());
+  PhiMatrixOperations::ApplyTopicModelOperation(args, 1.0f, /* add_missing_tokens = */ true,
+                                                target.get(), /* check_transaction_consistency = */ false);
   instance_->SetPhiMatrix(args.name(), target);
 }
 
