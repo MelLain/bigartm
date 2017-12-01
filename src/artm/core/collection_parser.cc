@@ -512,7 +512,7 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
           }
 
           if (elem[0] == '|') {
-            boost::split(class_ids, elem.substr(1), boost::is_any_of("^"));
+            boost::split(class_ids, elem.substr(1), boost::is_any_of(TransactionSeparator));
             if (class_ids.empty()) {
               class_ids = { DefaultClass };
             }
@@ -528,7 +528,8 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
           size_t split_index = elem.find(':');
           std::vector<std::string> tokens;
           boost::split(tokens,
-            split_index != std::string::npos ? elem.substr(0, split_index) : elem, boost::is_any_of("^"));
+            split_index != std::string::npos ? elem.substr(0, split_index) : elem,
+            boost::is_any_of(TransactionSeparator));
 
             if (class_ids.size() != tokens.size()) {
             std::stringstream ss;

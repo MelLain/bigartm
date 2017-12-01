@@ -39,6 +39,8 @@ const int kIdleLoopFrequency = 1;  // 1 ms
 
 const int kBatchNameLength = 6;
 
+const std::string TransactionSeparator = "^";
+
 template <typename T>
 std::string to_string(T value) {
   return boost::lexical_cast<std::string>(value);

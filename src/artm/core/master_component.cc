@@ -557,7 +557,7 @@ void MasterComponent::InitializeModel(const InitializeModelArgs& args) {
   }
 
   std::shared_ptr<PhiMatrix> new_ttm;
-  int excluded_tokens = 0;
+  int included_tokens = 0;
   if (args.has_dictionary_name()) {
     auto dict = instance_->dictionaries()->get(args.dictionary_name());
     if (dict == nullptr) {
@@ -578,10 +578,17 @@ void MasterComponent::InitializeModel(const InitializeModelArgs& args) {
       if (config->class_id_size() > 0 && !is_member(token.class_id, config->class_id())) {
         continue;
       }
-      new_ttm->AddToken(token);
+      ++included_tokens;
+      if (dict->HasTransactions()) {  // new style dictionary
+        for (const auto& tt : *(dict->GetTransactionTypes(token.class_id))) {
+          new_ttm->AddToken(Token(token.class_id, token.keyword, tt));
+        }
+      } else {  // old-style dictionary
+        new_ttm->AddToken(Token(token.class_id, token.keyword));
+      }
     }
 
-    excluded_tokens = dict->size() - new_ttm->token_size();
+    int excluded_tokens = dict->size() - included_tokens;
     LOG_IF(INFO, excluded_tokens > 0)
       << excluded_tokens
       << " tokens were present in the dictionary, but excluded from the model";
@@ -883,7 +890,14 @@ void MasterComponent::MergeModel(const MergeModelArgs& merge_model_args) {
     }
 
     for (int token_index = 0; token_index < (int64_t) dictionary->size(); ++token_index) {
-      nwt_target->AddToken(dictionary->entry(token_index)->token());
+      Token token = dictionary->entry(token_index)->token();
+      if (dictionary->HasTransactions()) {  // new style dictionary
+        for (const auto& tt : *(dictionary->GetTransactionTypes(token.class_id))) {
+          nwt_target->AddToken(Token(token.class_id, token.keyword, tt));
+        }
+      } else {  // old-style dictionary
+        nwt_target->AddToken(Token(token.class_id, token.keyword));
+      }
     }
   }
 

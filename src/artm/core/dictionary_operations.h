@@ -25,6 +25,9 @@ class DictionaryOperations {
   static std::shared_ptr<Dictionary> Filter(const FilterDictionaryArgs& args, const Dictionary& dict);
 
   static void StoreIntoDictionaryData(const Dictionary& dict, DictionaryData* data);
+
+ private:
+  static void UpdateTransactionTypes(const DictionaryData& data, std::shared_ptr<Dictionary> dict);
 };
 
 }  // namespace core

@@ -208,6 +208,26 @@ void Dictionary::clear_cooc() {
   cooc_dfs_.clear();
 }
 
+void Dictionary::AddTransactionType(const ClassId& class_id, const TransactionType& transaction_type) {
+  class_id_to_transaction_types_[class_id].insert(transaction_type);
+}
+
+const std::set<TransactionType>* Dictionary::GetTransactionTypes(const ClassId& class_id) const {
+  auto iter = class_id_to_transaction_types_.find(class_id);
+  if (iter != class_id_to_transaction_types_.end()) {
+    return &(iter->second);
+  }
+  return nullptr;
+}
+
+const std::set<TransactionType> Dictionary::GetAllTransactionTypes() const {
+  std::set<TransactionType> retval;
+  for (auto& iter = class_id_to_transaction_types_.begin(); iter != class_id_to_transaction_types_.end(); ++iter) {
+    retval.insert(iter->second.begin(), iter->second.end());
+  }
+  return retval;
+}
+
 }  // namespace core
 }  // namespace artm
 // vim: set ts=2 sw=2:

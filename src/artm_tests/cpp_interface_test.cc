@@ -625,6 +625,11 @@ TEST(CppInterface, Dictionaries) {
   ASSERT_GT(dictionary.token_tf(0), 0);
   ASSERT_GT(dictionary.token_value(0), 0);
 
+
+  // gather dictionary should contain any class_id as
+  // transaction type if token_id field was used in batches
+  ASSERT_EQ(dictionary.transaction_type_size(), 1);
+
   // Filter
   artm::FilterDictionaryArgs filter_args;
   filter_args.set_dictionary_name("gathered_dictionary");
@@ -675,6 +680,81 @@ TEST(ProtobufMessages, Json) {
   ASSERT_EQ(::google::protobuf::util::JsonStringToMessage("{num_processors:12}", &config2),
             ::google::protobuf::util::Status::OK);
   ASSERT_EQ(config.num_processors(), config2.num_processors());
+}
+
+// artm_tests.exe --gtest_filter=CppInterface.TransactionDictionaries
+TEST(CppInterface, TransactionDictionaries) {
+  std::string target_folder = artm::test::Helpers::getUniqueString();
+
+  ::artm::CollectionParserConfig config;
+  config.set_format(::artm::CollectionParserConfig_CollectionFormat_VowpalWabbit);
+  config.set_target_folder(target_folder);
+  config.set_docword_file_path("../../../test_data/vw_transaction_data_extended.txt");
+  config.set_num_items_per_batch(2);
+
+  ::artm::ParseCollection(config);
+
+  artm::MasterModelConfig master_config;
+  artm::MasterModel master(master_config);
+
+  auto checker = [](const artm::DictionaryData& dict) {
+    ASSERT_EQ(dict.token_size(), 8);
+
+    ASSERT_EQ(dict.transaction_type_size(), 4);
+
+    ASSERT_EQ(dict.transaction_type(0).value(0), "class_1");
+    ASSERT_EQ(dict.transaction_type(1).value(0), "class_1");
+    ASSERT_EQ(dict.transaction_type(1).value(1), "class_2");
+
+    ASSERT_EQ(dict.transaction_type(2).value(0), "class_3");
+
+    ASSERT_EQ(dict.transaction_type(3).value(0), "class_4");
+    ASSERT_EQ(dict.transaction_type(3).value(1), "class_2");
+    ASSERT_EQ(dict.transaction_type(3).value(2), "class_1");
+  };
+
+  // Gather
+  artm::GatherDictionaryArgs gather_args;
+  gather_args.set_data_path(target_folder);
+  gather_args.set_dictionary_target_name("gathered_dictionary");
+  master.GatherDictionary(gather_args);
+
+  ::artm::GetDictionaryArgs get_dict;
+  get_dict.set_dictionary_name("gathered_dictionary");
+  checker(master.GetDictionary(get_dict));
+
+  // Export & Import
+  artm::ExportDictionaryArgs export_args;
+  export_args.set_file_name(artm::test::Helpers::getUniqueString() + ".dict");
+  export_args.set_dictionary_name("gathered_dictionary");
+  master.ExportDictionary(export_args);
+
+  artm::ImportDictionaryArgs import_args;
+  import_args.set_file_name(export_args.file_name());
+  import_args.set_dictionary_name("imported_dictionary");
+  master.ImportDictionary(import_args);
+
+  get_dict.set_dictionary_name("imported_dictionary");
+  checker(master.GetDictionary(get_dict));
+
+  // Get and Create
+  artm::GetDictionaryArgs get_args;
+  get_args.set_dictionary_name("imported_dictionary");
+  auto data = master.GetDictionary(get_args);
+  checker(data);
+
+  data.set_name("created_dictionary");
+  master.CreateDictionary(data);
+
+  get_args.set_dictionary_name("created_dictionary");
+  data = master.GetDictionary(get_args);
+  checker(data);
+
+  try { boost::filesystem::remove_all(target_folder); }
+  catch (...) {}
+
+  try { boost::filesystem::remove(import_args.file_name()); }
+  catch (...) {}
 }
 
 // artm_tests.exe --gtest_filter=CppInterface.ReconfigureTopics
