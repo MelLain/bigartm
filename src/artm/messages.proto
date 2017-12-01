@@ -29,6 +29,7 @@ message Item {
   optional string title = 3;
   repeated int32 token_id = 4;
   repeated float token_weight = 5;
+  repeated IntArray transaction_token_ids = 6;  // alternative to token_id field
 }
 
 // Represents a field withing an item.
@@ -445,6 +446,9 @@ message TopicModel {
   repeated string class_id = 6;
   repeated IntArray topic_indices = 8;
   optional int64 num_values = 9;  // NNZ for sparse retrieval
+
+  // field with length equal to number of all unique transaction types
+  repeated StringArray transaction_type = 10;
 }
 
 // Represents a theta matrix.
@@ -529,6 +533,8 @@ message FilterDictionaryArgs {
 
   optional int64 max_dictionary_size = 10;
   optional bool recalculate_value = 11 [default = false];
+
+  optional StringArray transaction_type = 12;
 }
 
 message GatherDictionaryArgs {

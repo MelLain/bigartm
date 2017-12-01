@@ -74,6 +74,22 @@ static bool useClassId(const ClassId& class_id, const CollectionParserConfig& co
   return is_member(class_id, config.class_id());
 }
 
+static bool useClassId(const std::vector<ClassId>& class_ids, const CollectionParserConfig& config) {
+  if (config.class_id_size() == 0) {
+    return true;
+  }
+  if (class_ids.empty() || (class_ids.size() == 1 && class_ids[0] == DefaultClass)) {
+    return is_member(std::string(), config.class_id()) || is_member(DefaultClass, config.class_id());
+  }
+
+  for (ClassId class_id : class_ids) {
+    if (!is_member(class_id, config.class_id())) {
+      return false;
+    }
+  }
+  return true;
+}
+
 CollectionParser::CollectionParser(const ::artm::CollectionParserConfig& config) : config_(config) { }
 
 CollectionParserInfo CollectionParser::ParseDocwordBagOfWordsUci(TokenMap* token_map) {
@@ -354,30 +370,34 @@ class CollectionParser::BatchCollector {
     batch_.set_id(boost::lexical_cast<std::string>(boost::uuids::random_generator()()));
   }
 
-  void Record(Token token, float token_weight) {
-    if (global_map_.find(token) == global_map_.end()) {
-      global_map_.insert(std::make_pair(token, CollectionParserTokenInfo(token.keyword, token.class_id)));
-    }
-    if (local_map_.find(token) == local_map_.end()) {
-      local_map_.insert(std::make_pair(token, batch_.token_size()));
-      batch_.add_token(token.keyword);
-      batch_.add_class_id(token.class_id);
-    }
-
-    CollectionParserTokenInfo& token_info = global_map_[token];
-    int local_token_id = local_map_[token];
-
+  void Record(std::vector<ClassId> class_ids, std::vector<std::string> tokens, float token_weight) {
+    // prepare item for transaction insetion
     if (item_ == nullptr) {
       StartNewItem();
     }
-
-    item_->add_token_id(local_token_id);
+    auto token_ids = item_->add_transaction_token_ids();
     item_->add_token_weight(token_weight);
 
-    token_info.items_count++;
-    token_info.token_weight += token_weight;
-    total_token_weight_ += token_weight;
-    total_tokens_count_ += 1;
+    for (int i = 0; i < class_ids.size(); ++i) {
+      Token token(class_ids[i], tokens[i]);
+      if (global_map_.find(token) == global_map_.end()) {
+        global_map_.insert(std::make_pair(token, CollectionParserTokenInfo(token.keyword, token.class_id)));
+      }
+      if (local_map_.find(token) == local_map_.end()) {
+        local_map_.insert(std::make_pair(token, batch_.token_size()));
+        batch_.add_token(token.keyword);
+        batch_.add_class_id(token.class_id);
+      }
+
+      CollectionParserTokenInfo& token_info = global_map_[token];
+      int local_token_id = local_map_[token];
+
+      token_ids->add_value(local_token_id);
+      token_info.items_count++;
+      token_info.token_weight += token_weight;
+      total_token_weight_ += token_weight;
+      total_tokens_count_ += 1;
+    }
   }
 
   void FinishItem(int item_id, std::string item_title) {
@@ -484,7 +504,7 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
 
         std::string item_title = strs[0];
 
-        ClassId class_id = DefaultClass;
+        std::vector<ClassId> class_ids = { DefaultClass };
         for (unsigned elem_index = 1; elem_index < strs.size(); ++elem_index) {
           std::string elem = strs[elem_index];
           if (elem.size() == 0) {
@@ -492,21 +512,32 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
           }
 
           if (elem[0] == '|') {
-            class_id = elem.substr(1);
-            if (class_id.empty()) {
-              class_id = DefaultClass;
+            boost::split(class_ids, elem.substr(1), boost::is_any_of("^"));
+            if (class_ids.empty()) {
+              class_ids = { DefaultClass };
             }
             continue;
           }
 
           // Skip token when it is not among modalities that user has requested to parse
-          if (!useClassId(class_id, config)) {
+          if (!useClassId(class_ids, config)) {
             continue;
           }
 
-          float token_weight = 1.0f;
-          std::string token = elem;
+          float transaction_weight = 1.0f;
           size_t split_index = elem.find(':');
+          std::vector<std::string> tokens;
+          boost::split(tokens,
+            split_index != std::string::npos ? elem.substr(0, split_index) : elem, boost::is_any_of("^"));
+
+            if (class_ids.size() != tokens.size()) {
+            std::stringstream ss;
+            ss << "Error in " << config.docword_file_path() << ":" << line_no
+               << ", transaction type size is " << class_ids.size() << " and transaction size is "
+               << tokens.size() << " in " << elem;
+            BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
+          }
+
           if (split_index != std::string::npos) {
             if (split_index == 0 || split_index == (elem.size() - 1)) {
               std::stringstream ss;
@@ -514,10 +545,9 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
                  << ", entries can not start or end with colon: " << elem;
               BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
             }
-            token = elem.substr(0, split_index);
-            std::string token_occurences_string = elem.substr(split_index + 1);
+            std::string transaction_occurences_string = elem.substr(split_index + 1);
             try {
-              token_weight = boost::lexical_cast<float>(token_occurences_string);
+              transaction_weight = boost::lexical_cast<float>(transaction_occurences_string);
             }
             catch (boost::bad_lexical_cast &) {
               std::stringstream ss;
@@ -527,7 +557,7 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
             }
           }
 
-          batch_collector.Record(artm::core::Token(class_id, token), token_weight);
+          batch_collector.Record(class_ids, tokens, transaction_weight);
         }
 
         batch_collector.FinishItem(line_no, item_title);
