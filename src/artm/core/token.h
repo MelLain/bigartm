@@ -59,6 +59,14 @@ class TransactionType {
     return AsString() < tt.AsString();
   }
 
+  bool operator==(const TransactionType& tt) const {
+    return AsString() == tt.AsString();
+  }
+
+  bool operator!=(const TransactionType& tt) const {
+    return !(*this == tt);
+  }
+
  private:
   std::string data_;
 };

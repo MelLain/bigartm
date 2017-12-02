@@ -463,6 +463,7 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
       std::vector<std::string> all_strs_for_batch;
       std::string batch_name;
       BatchCollector batch_collector;
+      std::set<TransactionType> transaction_types;
 
       {
         std::lock_guard<std::mutex> guard(lock);
@@ -558,6 +559,7 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
             }
           }
 
+          transaction_types.emplace(TransactionType(class_ids));
           batch_collector.Record(class_ids, tokens, transaction_weight);
         }
 
@@ -571,6 +573,13 @@ CollectionParserInfo CollectionParser::ParseVowpalWabbit() {
           batch = batch_collector.FinishBatch(&parser_info);
           for (int token_id = 0; token_id < batch.token_size(); ++token_id) {
             token_map[artm::core::Token(batch.class_id(token_id), batch.token(token_id))] = true;
+          }
+
+          for (const auto& tt : transaction_types) {
+            auto ptr = batch.add_transaction_type();
+            for (const ClassId& class_id : tt.AsVector()) {
+              ptr->add_value(class_id);
+            }
           }
         }
         ::artm::core::Helpers::SaveBatch(batch, config.target_folder(), batch_name);

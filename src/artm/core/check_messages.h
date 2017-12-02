@@ -915,7 +915,11 @@ inline std::string DescribeMessage(const ::artm::ProcessBatchesArgs& message) {
   }
   ss << ", reuse_theta=" << (message.reuse_theta() ? "yes" : "no");
   ss << ", opt_for_avx=" << (message.opt_for_avx() ? "yes" : "no");
-  ss << ", predict_class_id=" << (message.predict_class_id());
+  ss << ", predict_transaction_type=" << (message.predict_transaction_type());
+  for (int i = 0; i < message.transaction_type_size(); ++i) {
+    ss << ", transaction_type=(" << TransactionType(message.transaction_type(i).value()).AsString()
+       << ":" << message.transaction_weight(i) << ")";
+  }
   return ss.str();
 }
 
@@ -976,6 +980,10 @@ inline std::string DescribeMessage(const ::artm::MasterModelConfig& message) {
   ss << ", cache_theta=" << (message.cache_theta() ? "yes" : "no");
   ss << ", opt_for_avx=" << (message.opt_for_avx() ? "yes" : "no");
   ss << ", disk_cache_path" << message.disk_cache_path();
+  for (int i = 0; i < message.transaction_type_size(); ++i) {
+    ss << ", transaction_type=(" << TransactionType(message.transaction_type(i).value()).AsString()
+      << ":" << message.transaction_weight(i) << ")";
+  }
 
   return ss.str();
 }
@@ -1017,7 +1025,7 @@ inline std::string DescribeMessage(const ::artm::TransformMasterModelArgs& messa
   ss << ", batch_filename_size=" << message.batch_filename_size();
   ss << ", batch_size=" << message.batch_size();
   ss << ", theta_matrix_type=" << message.theta_matrix_type();
-  ss << ", predict_class_id=" << message.predict_class_id();
+  ss << ", predict_transaction_type=" << message.predict_transaction_type();
   return ss.str();
 }
 

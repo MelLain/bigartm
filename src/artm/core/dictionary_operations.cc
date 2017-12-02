@@ -299,6 +299,7 @@ std::shared_ptr<Dictionary> DictionaryOperations::Gather(const GatherDictionaryA
 
     const Batch& batch = *batch_ptr;
 
+    std::set<TransactionType> batch_transaction_types;
     std::vector<float> token_df(batch.token_size(), 0);
     std::vector<float> token_n_w(batch.token_size(), 0);
     for (int item_id = 0; item_id < batch.item_size(); ++item_id) {
@@ -322,17 +323,39 @@ std::shared_ptr<Dictionary> DictionaryOperations::Gather(const GatherDictionaryA
             func(token_id);
           }
           if (!ptt.empty()) {
-            transaction_types.insert(TransactionType(ptt));
+            auto tt = TransactionType(ptt);
+            batch_transaction_types.insert(tt);
+            transaction_types.insert(tt);
+          } else {
+            LOG(WARNING) << "Item " << item_id << " in batch " << batch.id()
+                         << " has empty transaction_token_ids in position " << token_index
+                         << ", this token will be skipped";
+            continue;
           }
         } else {
           const int token_id = item.token_id(token_index);
           func(token_id);
-          transaction_types.insert(TransactionType({ batch.class_id(token_id) }));
+          auto tt = TransactionType({ batch.class_id(token_id) });
+          batch_transaction_types.insert(tt);
+          transaction_types.insert(tt);
         }
       }
 
       for (int i = 0; i < batch.token_size(); ++i) {
         token_df[i] += local_token_df[i] ? 1.0f : 0.0f;
+      }
+
+      if (batch.transaction_type_size() > 0) {
+        // check that batch transaction type are consistent with types, gather from it's items
+        std::set<TransactionType> local_tts;
+        for (const auto& tt : batch.transaction_type()) {
+          local_tts.insert(TransactionType(tt.value()));
+        }
+
+        if (local_tts != batch_transaction_types) {
+          BOOST_THROW_EXCEPTION(InvalidOperation(
+            "Dictionary::Gather() find batch with non-empty transaction_type field inconsistent with it's items."));
+        }
       }
     }
 

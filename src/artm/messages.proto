@@ -60,6 +60,9 @@ message Batch {
   repeated Item item = 3;
   optional string description = 4;
   optional string id = 5;
+
+  // should be consistent with all batch items or empty
+  repeated StringArray transaction_type = 6;
 }
 
 message RegularizerSettings {
@@ -628,10 +631,12 @@ message ProcessBatchesArgs {
   optional bool opt_for_avx = 11 [default = true];
   optional ThetaMatrixType theta_matrix_type = 14 [default = ThetaMatrixType_Cache];
   repeated float batch_weight = 15;
-  optional string predict_class_id = 17;
+  optional string predict_transaction_type = 17;
   repeated Batch batch = 18;
   optional bool use_random_theta = 19 [default = false];
   repeated string topic_name = 20;
+  repeated StringArray transaction_type = 21;
+  repeated float transaction_weight = 22;
 }
 
 message ProcessBatchesResult {
@@ -747,6 +752,8 @@ message MasterModelConfig {
   optional string disk_cache_path = 13;
   optional bool cache_theta = 15 [default = false];
   optional string ptd_name = 16 [default = ""];
+  repeated StringArray transaction_type = 17;
+  repeated float transaction_weight = 18;
 }
 
 message FitOfflineMasterModelArgs {
@@ -769,7 +776,7 @@ message TransformMasterModelArgs {
   repeated Batch batch = 1;
   repeated string batch_filename = 2;
   optional ThetaMatrixType theta_matrix_type = 3 [default = ThetaMatrixType_Dense];
-  optional string predict_class_id = 4;
+  optional string predict_transaction_type = 4;
 }
 
 message ConfigureLoggingArgs {

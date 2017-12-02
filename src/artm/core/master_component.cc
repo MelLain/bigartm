@@ -1081,8 +1081,8 @@ void MasterComponent::Request(const TransformMasterModelArgs& args, ::artm::Thet
   process_batches_args.mutable_class_id()->CopyFrom(config->class_id());
   process_batches_args.mutable_class_weight()->CopyFrom(config->class_weight());
   process_batches_args.set_theta_matrix_type(args.theta_matrix_type());
-  if (args.has_predict_class_id()) {
-    process_batches_args.set_predict_class_id(args.predict_class_id());
+  if (args.has_predict_transaction_type()) {
+    process_batches_args.set_predict_transaction_type(args.predict_transaction_type());
   }
 
   FixMessage(&process_batches_args);

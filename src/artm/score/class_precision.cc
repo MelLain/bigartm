@@ -20,7 +20,8 @@ void ClassPrecision::AppendScore(
     const artm::ProcessBatchesArgs& args,
     const std::vector<float>& theta,
     Score* score) {
-  if (!args.has_predict_class_id()) {
+  // ToDo(MelLain): STUB
+  if (!args.has_predict_transaction_type()) {
     return;
   }
 
@@ -30,7 +31,8 @@ void ClassPrecision::AppendScore(
   std::string keyword;
   for (int token_index = 0; token_index < p_wt.token_size(); token_index++) {
     const auto& token = p_wt.token(token_index);
-    if (token.class_id != args.predict_class_id()) {
+    // ToDo(MelLain): STUB
+    if (token.class_id != args.predict_transaction_type()) {
       continue;
     }
 
@@ -48,7 +50,8 @@ void ClassPrecision::AppendScore(
   bool error = true;
   for (const auto& token_id : item.token_id()) {
     const auto& token = token_dict[token_id];
-    if (token.class_id == args.predict_class_id() && token.keyword == keyword) {
+    // ToDo(MelLain): STUB
+    if (token.class_id == args.predict_transaction_type() && token.keyword == keyword) {
       error = false;
       break;
     }

@@ -1691,7 +1691,7 @@ int execute(const artm_options& options, int argc, char* argv[]) {
     TransformMasterModelArgs transform_args;
     transform_args.set_theta_matrix_type(::artm::ThetaMatrixType_Dense);
     if (!options.predict_class.empty()) {
-      transform_args.set_predict_class_id(options.predict_class);
+      transform_args.set_transaction_type(options.predict_class);
     }
     for (const auto& batch_filename : batch_file_names) {
       transform_args.add_batch_filename(batch_filename.string());
