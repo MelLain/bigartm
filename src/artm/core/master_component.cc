@@ -573,19 +573,29 @@ void MasterComponent::InitializeModel(const InitializeModelArgs& args) {
       BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
     }
 
+    std::set<TransactionType> mm_tt;
+    for (const auto& ptt : config->transaction_type()) {
+      mm_tt.insert(TransactionType(ptt.value()));
+    }
+
     new_ttm = std::make_shared< ::artm::core::DensePhiMatrix>(args.model_name(), args.topic_name());
     for (int index = 0; index < (int64_t) dict->size(); ++index) {
       ::artm::core::Token token = dict->entry(index)->token();
-      if (config->class_id_size() > 0 && !is_member(token.class_id, config->class_id())) {
-        continue;
-      }
-      ++included_tokens;
-      if (dict->HasTransactions()) {  // new style dictionary
+
+      if (dict->HasTransactions()) {
+        bool used_token = false;
         for (const auto& tt : *(dict->GetTransactionTypes(token.class_id))) {
-          new_ttm->AddToken(Token(token.class_id, token.keyword, tt));
+          if (mm_tt.size() < 1 || mm_tt.find(tt) != mm_tt.end()) {
+            used_token = true;
+            new_ttm->AddToken(Token(token.class_id, token.keyword, tt));
+          }
         }
-      } else {  // old-style dictionary
-        new_ttm->AddToken(Token(token.class_id, token.keyword));
+        included_tokens += used_token ? 1.0 : 0.0;
+      } else {
+        std::stringstream ss;
+        ss << "Dictionary '" << args.dictionary_name()
+           << "' is old-style one without transaction info.  It should be re-gathered";
+        BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
       }
     }
 
@@ -1078,8 +1088,8 @@ void MasterComponent::Request(const TransformMasterModelArgs& args, ::artm::Thet
     process_batches_args.set_reuse_theta(config->reuse_theta());
   }
 
-  process_batches_args.mutable_class_id()->CopyFrom(config->class_id());
-  process_batches_args.mutable_class_weight()->CopyFrom(config->class_weight());
+  process_batches_args.mutable_transaction_type()->CopyFrom(config->transaction_type());
+  process_batches_args.mutable_transaction_weight()->CopyFrom(config->transaction_weight());
   process_batches_args.set_theta_matrix_type(args.theta_matrix_type());
   if (args.has_predict_transaction_type()) {
     process_batches_args.set_predict_transaction_type(args.predict_transaction_type());
@@ -1220,8 +1230,8 @@ class ArtmExecutor {
       process_batches_args_.set_num_document_passes(master_model_config.num_document_passes());
     }
 
-    process_batches_args_.mutable_class_id()->CopyFrom(master_model_config.class_id());
-    process_batches_args_.mutable_class_weight()->CopyFrom(master_model_config.class_weight());
+    process_batches_args_.mutable_transaction_type()->CopyFrom(master_model_config.transaction_type());
+    process_batches_args_.mutable_transaction_weight()->CopyFrom(master_model_config.transaction_weight());
 
     for (const auto& regularizer : master_model_config.regularizer_config()) {
       process_batches_args_.add_regularizer_name(regularizer.name());

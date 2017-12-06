@@ -79,7 +79,7 @@ TEST(Regularizers, SmoothSparseTheta) {
     str << "item_" << i;
     item->set_title(str.str());
     for (int iToken = 0; iToken < nTokens; ++iToken) {
-      item->add_token_id(iToken);
+      auto ptr = item->add_transaction_token_ids(); ptr->add_value(iToken);
       item->add_token_weight(1.0);
     }
   }
@@ -265,16 +265,16 @@ TEST(Regularizers, NetPlsa) {
     artm::Item* item = batch.add_item();
     item->set_id(iDoc);
     for (int iToken = 0; iToken < nTokens; ++iToken) {
-      item->add_token_id(iToken);
+      auto ptr = item->add_transaction_token_ids(); ptr->add_value(iToken);
       int background_count = (iToken > 40) ? (1 + rand() % 5) : 0;  // NOLINT
       int topical_count = ((iToken < 40) && ((iToken % 10) == (iDoc % 10))) ? 10 : 0;
       item->add_token_weight(static_cast<float>(background_count + topical_count));
     }
     if (iDoc < 2) {
-      item->add_token_id(nTokens);
+      auto ptr = item->add_transaction_token_ids(); ptr->add_value(nTokens);
       item->add_token_weight(1.0f);
     } else if (iDoc == 2) {
-      item->add_token_id(nTokens + 1);
+      auto ptr = item->add_transaction_token_ids(); ptr->add_value(nTokens + 1);
       item->add_token_weight(1.0f);
     }
   }

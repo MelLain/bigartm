@@ -48,8 +48,8 @@ void ClassPrecision::AppendScore(
   }
 
   bool error = true;
-  for (const auto& token_id : item.token_id()) {
-    const auto& token = token_dict[token_id];
+  for (const auto& token_id : item.transaction_token_ids()) {
+    const auto& token = token_dict[token_id.value(0)];
     // ToDo(MelLain): STUB
     if (token.class_id == args.predict_transaction_type() && token.keyword == keyword) {
       error = false;

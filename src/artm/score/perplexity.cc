@@ -46,8 +46,9 @@ void Perplexity::AppendScore(
   ::google::protobuf::int64 zero_words = 0;
 
   // choose class_ids policy
+  /*
   if (config_.class_id_size() == 0) {
-    for (int i = 0; (i < args.class_id_size()) && (i < args.class_weight_size()); ++i) {
+    for (int i = 0; (i < args.class_id_size()) && (i < args.transaction_weight_size()); ++i) {
       class_weight_map.insert(std::make_pair(args.class_id(i), args.class_weight(i)));
       normalizer_map.insert(std::make_pair(args.class_id(i), 0.0));
       raw_map.insert(std::make_pair(args.class_id(i), 0.0));
@@ -55,7 +56,7 @@ void Perplexity::AppendScore(
     }
   } else {
     for (const auto& class_id : config_.class_id()) {
-      for (int i = 0; (i < args.class_id_size()) && (i < args.class_weight_size()); ++i) {
+      for (int i = 0; (i < args.class_id_size()) && (i < args.transaction_weight_size()); ++i) {
         if (class_id == args.class_id(i)) {
           class_weight_map.insert(std::make_pair(args.class_id(i), args.class_weight(i)));
           normalizer_map.insert(std::make_pair(args.class_id(i), 0.0));
@@ -70,12 +71,13 @@ void Perplexity::AppendScore(
       return;
     }
   }
+  */
   const bool use_class_ids = !class_weight_map.empty();
 
   // count perplexity normalizer n_d
   for (int token_index = 0; token_index < item.token_weight_size(); ++token_index) {
     if (use_class_ids) {
-      ::artm::core::ClassId class_id = token_dict[item.token_id(token_index)].class_id;
+      ::artm::core::ClassId class_id = token_dict[item.transaction_token_ids(token_index).value(0)].class_id;
       auto class_weight_iter = class_weight_map.find(class_id);
       if (class_weight_iter == class_weight_map.end()) {
         // we should not take tokens without class id weight into consideration
@@ -111,7 +113,7 @@ void Perplexity::AppendScore(
   std::vector<float> helper_vector(topic_size, 0.0f);
   for (int token_index = 0; token_index < item.token_weight_size(); ++token_index) {
     double sum = 0.0;
-    const auto& token = token_dict[item.token_id(token_index)];
+    const auto& token = token_dict[item.transaction_token_ids(token_index).value(0)];
 
     float class_weight = 1.0f;
     if (use_class_ids) {

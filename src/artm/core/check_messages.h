@@ -222,7 +222,7 @@ inline std::string DescribeErrors(const ::artm::GetScoreValueArgs& message) {
 inline std::string DescribeErrors(const ::artm::MasterModelConfig& message) {
   std::stringstream ss;
 
-  if (message.class_weight_size() != message.class_id_size()) {
+  if (message.transaction_weight_size() != message.transaction_type_size()) {
     ss << "Length mismatch in fields MasterModelConfig.class_id and MasterModelConfig.class_weight; ";
   }
 
@@ -652,6 +652,15 @@ inline void FixMessage(::artm::Batch* message) {
     item.clear_field();
   }
 
+  // Upgrade away from token_id
+  for (auto& item : *message->mutable_item()) {
+    auto ptr = item.add_transaction_token_ids();
+    for (const int val : item.token_id()) {
+      ptr->add_value(val);
+    }
+    item.clear_token_id();
+  }
+
   // For items without title set title to item id
   for (auto& item : *message->mutable_item()) {
     if (!item.has_title() && item.has_id()) {
@@ -696,9 +705,9 @@ inline void FixMessage(::artm::ProcessBatchesArgs* message) {
     FixMessage(message->mutable_batch(i));
   }
 
-  if (message->class_weight_size() == 0) {
-    for (int i = 0; i < message->class_id_size(); ++i) {
-      message->add_class_weight(1.0f);
+  if (message->transaction_weight_size() == 0) {
+    for (int i = 0; i < message->transaction_type_size(); ++i) {
+      message->add_transaction_weight(1.0f);
     }
   }
 }
@@ -712,9 +721,9 @@ inline void FixMessage(::artm::TopTokensScoreConfig* message) {
 
 template<>
 inline void FixMessage(::artm::MasterModelConfig* message) {
-  if (message->class_weight_size() == 0) {
-    for (int i = 0; i < message->class_id_size(); ++i) {
-      message->add_class_weight(1.0f);
+  if (message->transaction_weight_size() == 0) {
+    for (int i = 0; i < message->transaction_type_size(); ++i) {
+      message->add_transaction_weight(1.0f);
     }
   }
 
@@ -910,9 +919,6 @@ inline std::string DescribeMessage(const ::artm::ProcessBatchesArgs& message) {
   for (int i = 0; i < message.regularizer_name_size(); ++i) {
     ss << ", regularizer=(name:" << message.regularizer_name(i) << ", tau:" << message.regularizer_tau(i) << ")";
   }
-  for (int i = 0; i < message.class_id_size(); ++i) {
-    ss << ", class=(" << message.class_id(i) << ":" << message.class_weight(i) << ")";
-  }
   ss << ", reuse_theta=" << (message.reuse_theta() ? "yes" : "no");
   ss << ", opt_for_avx=" << (message.opt_for_avx() ? "yes" : "no");
   ss << ", predict_transaction_type=" << (message.predict_transaction_type());
@@ -963,9 +969,6 @@ inline std::string DescribeMessage(const ::artm::MasterModelConfig& message) {
   std::stringstream ss;
   ss << "MasterModelConfig";
   ss << ": topic_name_size=" << message.topic_name_size();
-  for (int i = 0; i < message.class_id_size(); ++i) {
-    ss << ", class=(" << message.class_id(i) << ":" << message.class_weight(i) << ")";
-  }
   ss << ", score_config_size=" << message.score_config_size();
   ss << ", num_processors=" << message.num_processors();
   ss << ", pwt_name=" << message.pwt_name();

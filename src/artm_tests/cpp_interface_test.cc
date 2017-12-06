@@ -114,14 +114,14 @@ void RunBasicTest(bool serialize_as_json) {
     item->set_title(str.str());
     item->set_id(666 + iDoc);
     for (int iToken = 0; iToken < nTokens; ++iToken) {
-      item->add_token_id(iToken);
+      auto ptr = item->add_transaction_token_ids(); ptr->add_value(iToken);
       item->add_token_weight(static_cast<float>(iDoc + iToken + 1));
     }
   }
 
   EXPECT_EQ(batch.item().size(), nDocs);
   for (int i = 0; i < batch.item().size(); i++) {
-    EXPECT_EQ(batch.item(i).token_id_size(), nTokens);
+    EXPECT_EQ(batch.item(i).transaction_token_ids_size(), nTokens);
   }
 
   // Index doc-token matrix

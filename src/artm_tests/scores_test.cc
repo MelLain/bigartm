@@ -23,8 +23,15 @@ TEST(Scores, Perplexity) {
   ::artm::test::Api api_1(master_1);
 
   ::artm::MasterModelConfig master_config_2 = ::artm::test::TestMother::GenerateMasterModelConfig(nTopics);
-  master_config_2.add_class_id("@default_class"); master_config_2.add_class_weight(1.0f);
-  master_config_2.add_class_id("@some_class"); master_config_2.add_class_weight(2.0f);
+  
+  auto ptr = master_config_2.add_transaction_type();
+  ptr->add_value("@default_class");
+  master_config_2.add_transaction_weight(1.0f);
+  
+  ptr = master_config_2.add_transaction_type();
+  ptr->add_value("@some_class");
+  master_config_2.add_transaction_weight(2.0f);
+
   ::artm::test::Helpers::ConfigurePerplexityScore("perplexity_1", &master_config_2, { });
   ::artm::test::Helpers::ConfigurePerplexityScore("perplexity_2", &master_config_2, { "@default_class" });
   ::artm::test::Helpers::ConfigurePerplexityScore("perplexity_3", &master_config_2,

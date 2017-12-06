@@ -18,8 +18,8 @@ void ItemsProcessed::AppendScore(const Batch& batch,
   float token_weight_in_effect = 0.0f;
 
   for (const auto& item : batch.item()) {
-    for (int token_index = 0; token_index < item.token_id_size(); token_index++) {
-      int token_id = item.token_id(token_index);
+    for (int token_index = 0; token_index < item.transaction_token_ids_size(); token_index++) {
+      int token_id = item.transaction_token_ids(token_index).value(token_index);
       token_weight += item.token_weight(token_index);
       const std::string& token = batch.token(token_id);
       const std::string& class_id = batch.class_id(token_id);
@@ -29,9 +29,9 @@ void ItemsProcessed::AppendScore(const Batch& batch,
         continue;
       }
 
-      if (args.class_id_size() > 0 && !::artm::core::is_member(class_id, args.class_id())) {
-        continue;
-      }
+      //if (args.class_id_size() > 0 && !::artm::core::is_member(class_id, args.class_id())) {
+      //  continue;
+      //}
       token_weight_in_effect += item.token_weight(token_index);
     }
   }

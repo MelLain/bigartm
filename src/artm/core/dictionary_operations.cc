@@ -332,12 +332,6 @@ std::shared_ptr<Dictionary> DictionaryOperations::Gather(const GatherDictionaryA
                          << ", this token will be skipped";
             continue;
           }
-        } else {
-          const int token_id = item.token_id(token_index);
-          func(token_id);
-          auto tt = TransactionType({ batch.class_id(token_id) });
-          batch_transaction_types.insert(tt);
-          transaction_types.insert(tt);
         }
       }
 

@@ -38,7 +38,7 @@ TEST(Regularizer, TopicSegmentationPtdw) {
   item->set_title("doc0");
   std::vector<int> token_sequence = {0, 1, 2, 0, 3, 2, 1, 4, 5};
   for (auto e : token_sequence) {
-    item->add_token_id(e);
+    auto ptr = item->add_transaction_token_ids(); ptr->add_value(e);
     item->add_token_weight(1.0);
   }
 

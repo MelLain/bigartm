@@ -112,8 +112,12 @@ TEST(MultipleClasses, BasicTest) {
   master_config.set_cache_theta(true);
 
   ::artm::MasterModelConfig master_config3(master_config);
-  master_config3.add_class_id("@default_class"); master_config3.add_class_weight(0.5f);
-  master_config3.add_class_id("__custom_class"); master_config3.add_class_weight(2.0f);
+  auto ptr = master_config3.add_transaction_type();
+  ptr->add_value("@default_class");
+  master_config3.add_transaction_weight(0.5f);
+  ptr = master_config3.add_transaction_type();
+  ptr->add_value("__custom_class");
+  master_config3.add_transaction_weight(2.0f);
 
   ::artm::MasterModelConfig master_config_reg(master_config);
   // Create theta-regularizer for some (not all) topics
@@ -256,8 +260,10 @@ TEST(MultipleClasses, InitializeSomeModalities) {
   int nTopics = 10;
 
   ::artm::MasterModelConfig master_config = ::artm::test::TestMother::GenerateMasterModelConfig(nTopics);
-  master_config.add_class_id("@default_class");
-  master_config.add_class_id("__custom_class");
+  auto ptr = master_config.add_transaction_type();
+  ptr->add_value("@default_class");
+  ptr = master_config.add_transaction_type();
+  ptr->add_value("__custom_class");
 
   ::artm::DictionaryData d1;
   d1.set_name("d1");
@@ -290,8 +296,12 @@ TEST(MultipleClasses, ThrowIfNoTokensInEffect) {
   int nTopics = 10;
 
   ::artm::MasterModelConfig master_config = ::artm::test::TestMother::GenerateMasterModelConfig(nTopics);
-  master_config.add_class_id("@default_class"); master_config.add_class_weight(0.5f);
-  master_config.add_class_id("__custom_class"); master_config.add_class_weight(2.0f);
+  auto ptr = master_config.add_transaction_type();
+  ptr->add_value("@default_class");
+  master_config.add_transaction_weight(0.5f);
+  ptr = master_config.add_transaction_type();
+  ptr->add_value("__custom_class");
+  master_config.add_transaction_weight(2.0f);
 
   ::artm::MasterModelConfig master_config_reg(master_config);
 
@@ -304,8 +314,9 @@ TEST(MultipleClasses, ThrowIfNoTokensInEffect) {
   ::artm::test::Api api(master);
   auto offlineArgs = api.Initialize(batches);
 
-  master_config.clear_class_id(); master_config.clear_class_weight();
-  master_config.add_class_id("__unknown_class");
+  master_config.clear_transaction_type(); master_config.clear_transaction_weight();
+  ptr = master_config.add_transaction_type();
+  ptr->add_value("__unknown_class");
   master.Reconfigure(master_config);
 
   // Index doc-token matrix
@@ -370,11 +381,15 @@ TEST(MultipleClasses, WithoutDefaultClass) {
   ::artm::test::Helpers::ConfigurePerplexityScore("perplexity", &master_config);
   configureItemsProcessedScore("items_processed", &master_config);
 
-  master_config.add_class_id("class_one"); master_config.add_class_weight(2.0f);
+  auto ptr = master_config.add_transaction_type();
+  ptr->add_value("class_one");
+  master_config.add_transaction_weight(2.0f);
   ::artm::MasterModel master(master_config);
   ::artm::test::Api api(master);
 
-  master_config.add_class_id("class_two"); master_config.add_class_weight(0.5f);
+  ptr = master_config.add_transaction_type();
+  ptr->add_value("class_two");
+  master_config.add_transaction_weight(0.5f);
   ::artm::MasterModel master2(master_config);
   ::artm::test::Api api2(master2);
 
@@ -566,8 +581,14 @@ TEST(MultipleClasses, GetTopicModel) {
     master_config.add_topic_name(ss.str());
   }
 
-  master_config.add_class_id("class_one"); master_config.add_class_weight(1.0f);
-  master_config.add_class_id("class_two"); master_config.add_class_weight(1.0f);
+  auto ptr = master_config.add_transaction_type();
+  ptr->add_value("class_one");
+  master_config.add_transaction_weight(1.0f);
+
+  ptr = master_config.add_transaction_type();
+  ptr->add_value("class_two");
+  master_config.add_transaction_weight(1.0f);
+
   master_config.set_cache_theta(true);
   ::artm::MasterModel master(master_config);
   ::artm::test::Api api(master);

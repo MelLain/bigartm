@@ -238,7 +238,8 @@ CollectionParserInfo CollectionParser::ParseDocwordBagOfWordsUci(TokenMap* token
       iter = batch_dictionary.find(token_id);
     }
 
-    item->add_token_id(iter->second);
+    auto ptr = item->add_transaction_token_ids();
+    ptr->add_value(iter->second);
     item->add_token_weight(token_weight);
 
     // Increment statistics

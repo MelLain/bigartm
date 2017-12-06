@@ -27,7 +27,7 @@ message Item {
   optional int32 id = 1;
   repeated Field field = 2;  // obsolete in BigARTM v0.8.0
   optional string title = 3;
-  repeated int32 token_id = 4;
+  repeated int32 token_id_ = 4;  // obsolete
   repeated float token_weight = 5;
   repeated IntArray transaction_token_ids = 6;  // alternative to token_id field
 }
@@ -625,18 +625,16 @@ message ProcessBatchesArgs {
   optional int32 num_document_passes = 4 [default = 10];
   repeated string regularizer_name = 6;
   repeated float regularizer_tau = 7;
-  repeated string class_id = 8;
-  repeated float class_weight = 9;
-  optional bool reuse_theta = 10 [default = false];
-  optional bool opt_for_avx = 11 [default = true];
-  optional ThetaMatrixType theta_matrix_type = 14 [default = ThetaMatrixType_Cache];
-  repeated float batch_weight = 15;
-  optional string predict_transaction_type = 17;
-  repeated Batch batch = 18;
-  optional bool use_random_theta = 19 [default = false];
-  repeated string topic_name = 20;
-  repeated StringArray transaction_type = 21;
-  repeated float transaction_weight = 22;
+  optional bool reuse_theta = 8 [default = false];
+  optional bool opt_for_avx = 9 [default = true];
+  optional ThetaMatrixType theta_matrix_type = 10 [default = ThetaMatrixType_Cache];
+  repeated float batch_weight = 11;
+  optional string predict_transaction_type = 12;
+  repeated Batch batch = 13;
+  optional bool use_random_theta = 14 [default = false];
+  repeated string topic_name = 15;
+  repeated StringArray transaction_type = 16;
+  repeated float transaction_weight = 17;
 }
 
 message ProcessBatchesResult {
@@ -739,21 +737,19 @@ message AwaitOperationArgs {
 
 message MasterModelConfig {
   repeated string topic_name = 1;
-  repeated string class_id = 2;
-  repeated float class_weight = 3;
-  repeated ScoreConfig score_config = 4;
-  repeated RegularizerConfig regularizer_config = 5;
-  optional int32 num_processors = 6;
-  optional string pwt_name = 7 [default = "pwt"];
-  optional string nwt_name = 8 [default = "nwt"];
-  optional int32 num_document_passes = 9;
-  optional bool reuse_theta = 10 [default = false];
-  optional bool opt_for_avx = 11 [default = true];
-  optional string disk_cache_path = 13;
-  optional bool cache_theta = 15 [default = false];
-  optional string ptd_name = 16 [default = ""];
-  repeated StringArray transaction_type = 17;
-  repeated float transaction_weight = 18;
+  repeated ScoreConfig score_config = 2;
+  repeated RegularizerConfig regularizer_config = 3;
+  optional int32 num_processors = 4;
+  optional string pwt_name = 5 [default = "pwt"];
+  optional string nwt_name = 6 [default = "nwt"];
+  optional int32 num_document_passes = 7;
+  optional bool reuse_theta = 8 [default = false];
+  optional bool opt_for_avx = 9 [default = true];
+  optional string disk_cache_path = 10;
+  optional bool cache_theta = 11 [default = false];
+  optional string ptd_name = 12 [default = ""];
+  repeated StringArray transaction_type = 13;
+  repeated float transaction_weight = 14;
 }
 
 message FitOfflineMasterModelArgs {
