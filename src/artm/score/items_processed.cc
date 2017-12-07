@@ -18,8 +18,9 @@ void ItemsProcessed::AppendScore(const Batch& batch,
   float token_weight_in_effect = 0.0f;
 
   for (const auto& item : batch.item()) {
-    for (int token_index = 0; token_index < item.token_id_size(); token_index++) {
-      int token_id = item.token_id(token_index);
+    for (int token_index = 0; token_index < item.transaction_token_ids_size(); token_index++) {
+      // ToDo(MelLain): STUB
+      int token_id = item.transaction_token_ids(token_index).value(0);
       token_weight += item.token_weight(token_index);
       const std::string& token = batch.token(token_id);
       const std::string& class_id = batch.class_id(token_id);

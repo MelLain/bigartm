@@ -2,7 +2,9 @@
 
 #pragma once
 
+#include <set>
 #include <string>
+#include <vector>
 
 #include "boost/lexical_cast.hpp"
 #include "boost/uuid/uuid_io.hpp"
@@ -182,29 +184,6 @@ inline std::string DescribeErrors(const ::artm::Batch& message) {
   if (has_tokens && (message.class_id_size() != message.token_size())) {
     ss << "Length mismatch in fields Batch.class_id and Batch.token, batch.id = " << message.id();
     return ss.str();
-  }
-
-  for (int item_id = 0; item_id < message.item_size(); ++item_id) {
-    for (const auto& field : message.item(item_id).field()) {
-      if (field.token_count_size() != 0) {
-        ss << "Field.token_count field is deprecated. Use Field.token_weight instead; ";
-        break;
-      }
-
-      if (field.token_weight_size() != field.token_id_size()) {
-        ss << "Length mismatch in field Batch.item(" << item_id << ").token_weight and token_id; ";
-        break;
-      }
-
-      for (int token_index = 0; token_index < field.token_id_size(); token_index++) {
-        int token_id = field.token_id(token_index);
-        if ((token_id < 0) || (has_tokens && (token_id >= message.token_size()))) {
-          ss << "Value " << token_id << " in Batch.Item(" << item_id
-             << ").token_id is negative or exceeds Batch.token_size";
-          return ss.str();
-        }
-      }
-    }
   }
 
   return ss.str();
@@ -652,10 +631,47 @@ inline void FixMessage(::artm::Batch* message) {
     item.clear_field();
   }
 
+  // Upgrade away from token_id
+  for (auto& item : *message->mutable_item()) {
+    for (const int val : item.token_id()) {
+      item.add_transaction_token_ids()->add_value(val);
+    }
+    item.clear_token_id();
+  }
+
   // For items without title set title to item id
   for (auto& item : *message->mutable_item()) {
     if (!item.has_title() && item.has_id()) {
       item.set_title(boost::lexical_cast<std::string>(item.id()));
+    }
+  }
+
+  // Fill internal transaction_type field if it is not defined
+  if (message->transaction_type_size() > 0) {
+    LOG(INFO) << "Batch " << message->id() << " is old and should be re-generated for processing speed-up";
+    std::set<TransactionType> batch_tt;
+    for (int item_id = 0; item_id < message->item_size(); ++item_id) {
+      const Item& item = message->item(item_id);
+      for (int token_index = 0; token_index < item.token_weight_size(); ++token_index) {
+        std::vector<ClassId> ptt;
+        for (const int token_id : item.transaction_token_ids(token_index).value()) {
+          ptt.push_back(message->class_id(token_id));
+        }
+        if (!ptt.empty()) {
+          batch_tt.insert(TransactionType(ptt));
+        } else {
+          LOG(WARNING) << "Item " << item_id << " in batch " << message->id()
+            << " has empty transaction_token_ids in position " << token_index;
+          continue;
+        }
+      }
+    }
+
+    for (const auto& tt : batch_tt) {
+      auto ptr = message->add_transaction_type();
+      for (const ClassId& class_id : tt.AsVector()) {
+        ptr->add_value(class_id);
+      }
     }
   }
 }
@@ -679,6 +695,16 @@ inline void FixMessage(::artm::DictionaryData* message) {
   if (message->class_id_size() == 0) {
     for (int i = 0; i < message->token_size(); ++i) {
       message->add_class_id(DefaultClass);
+    }
+  }
+
+  if (message->transaction_type_size() == 0) {
+    std::set<ClassId> class_ids;
+    for (int i = 0; i < message->token_size(); ++i) {
+      class_ids.emplace(message->class_id(i));
+    }
+    for (const ClassId& class_id : class_ids) {
+      message->add_transaction_type()->add_value(class_id);
     }
   }
 }

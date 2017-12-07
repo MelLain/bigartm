@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <set>
 
 #include "boost/exception/diagnostic_information.hpp"
 #include "boost/lexical_cast.hpp"
@@ -442,21 +443,13 @@ InitializeSparseNdw(const Batch& batch, const ProcessBatchesArgs& args) {
     }
   }
 
-  bool use_classes = false;
-  std::map<ClassId, float> class_id_to_weight;
-  if (args.class_id_size() != 0) {
-    use_classes = true;
-    for (int i = 0; i < args.class_id_size(); ++i) {
-      class_id_to_weight.insert(std::make_pair(args.class_id(i), args.class_weight(i)));
-    }
-  }
-
   // For sparse case
   for (int item_index = 0; item_index < batch.item_size(); ++item_index) {
     n_dw_row_ptr.push_back(static_cast<int>(n_dw_val.size()));
     const Item& item = batch.item(item_index);
-    for (int token_index = 0; token_index < item.token_id_size(); ++token_index) {
-      int token_id = item.token_id(token_index);
+    for (int token_index = 0; token_index < item.transaction_token_ids_size(); ++token_index) {
+      // ToDo(MelLain): STUB
+      int token_id = item.transaction_token_ids(token_index).value(0);
 
       float class_weight = 1.0f;
       if (use_classes) {
@@ -800,42 +793,6 @@ CalcScores(ScoreCalculatorInterface* score_calc, const Batch& batch,
 
 
 
-
-
-bool fillTokensInBatch(const PhiMatrix& phi_matrix, Batch* batch) {
-  if (batch->token_size() > 0) {
-    return true;
-  }
-
-  // Verify that max token_id is compatible with topic model.
-  const int token_size = phi_matrix.token_size();
-  for (auto& item : batch->item()) {
-    for (int token_id : item.token_id()) {
-      if (token_id < 0 || token_id >= token_size) {
-        LOG(ERROR) << "Batch " << batch->id() << " is incompatible with model " << phi_matrix.model_name()
-                    << " (batch.token_size() = 0 && item.token_id >= phi_matrix.token_size())";
-        return false;
-      }
-    }
-  }
-
-  batch->mutable_token()->Reserve(token_size);
-  batch->mutable_class_id()->Reserve(token_size);
-  for (int token_index = 0; token_index < token_size; ++token_index) {
-    const Token& token = phi_matrix.token(token_index);
-    batch->add_token(token.keyword);
-    batch->add_class_id(token.class_id);
-  }
-
-  return true;
-}
-
-
-
-
-
-
-
 void Processor::ThreadFunction() {
   try {
     int total_processed_batches = 0;  // counter
@@ -919,9 +876,7 @@ void Processor::ThreadFunction() {
         const PhiMatrix& p_wt = *phi_matrix;
 
         if (batch.token_size() == 0) {
-          if (!fillTokensInBatch(p_wt, &batch)) {
-            continue;
-          }
+          continue;
         }
 
         std::shared_ptr<const PhiMatrix> nwt_target;

@@ -388,6 +388,7 @@ void MasterComponent::ExportModel(const ExportModelArgs& args) {
       fout << str;
       get_topic_model_args.clear_class_id();
       get_topic_model_args.clear_token();
+      get_topic_model_args.clear_transaction_type();
     }
   }
 
@@ -573,19 +574,34 @@ void MasterComponent::InitializeModel(const InitializeModelArgs& args) {
       BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
     }
 
+    std::set<TransactionType> mm_tt;
+    for (const auto& ptt : config->transaction_type()) {
+      mm_tt.insert(TransactionType(ptt.value()));
+    }
+
     new_ttm = std::make_shared< ::artm::core::DensePhiMatrix>(args.model_name(), args.topic_name());
     for (int index = 0; index < (int64_t) dict->size(); ++index) {
       ::artm::core::Token token = dict->entry(index)->token();
+
+      // ignore all transactions that contain non-checked class_id
       if (config->class_id_size() > 0 && !is_member(token.class_id, config->class_id())) {
         continue;
       }
-      ++included_tokens;
-      if (dict->HasTransactions()) {  // new style dictionary
+
+      if (dict->HasTransactions()) {
+        bool used_token = false;
         for (const auto& tt : *(dict->GetTransactionTypes(token.class_id))) {
-          new_ttm->AddToken(Token(token.class_id, token.keyword, tt));
+          if (mm_tt.size() < 1 || mm_tt.find(tt) != mm_tt.end()) {
+            used_token = true;
+            new_ttm->AddToken(Token(token.class_id, token.keyword, tt));
+          }
         }
-      } else {  // old-style dictionary
-        new_ttm->AddToken(Token(token.class_id, token.keyword));
+        included_tokens += used_token ? 1.0 : 0.0;
+      } else {
+        std::stringstream ss;
+        ss << "Dictionary '" << args.dictionary_name()
+           << "' is old-style one without transaction info. It should be re-gathered";
+        BOOST_THROW_EXCEPTION(InvalidOperation(ss.str()));
       }
     }
 

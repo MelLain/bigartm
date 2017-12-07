@@ -75,7 +75,8 @@ void Perplexity::AppendScore(
   // count perplexity normalizer n_d
   for (int token_index = 0; token_index < item.token_weight_size(); ++token_index) {
     if (use_class_ids) {
-      ::artm::core::ClassId class_id = token_dict[item.token_id(token_index)].class_id;
+      // ToDo(MelLain): STUB
+      ::artm::core::ClassId class_id = token_dict[item.transaction_token_ids(token_index).value(0)].class_id;
       auto class_weight_iter = class_weight_map.find(class_id);
       if (class_weight_iter == class_weight_map.end()) {
         // we should not take tokens without class id weight into consideration
@@ -111,7 +112,8 @@ void Perplexity::AppendScore(
   std::vector<float> helper_vector(topic_size, 0.0f);
   for (int token_index = 0; token_index < item.token_weight_size(); ++token_index) {
     double sum = 0.0;
-    const auto& token = token_dict[item.token_id(token_index)];
+    // ToDo(MelLain): STUB
+    const auto& token = token_dict[item.transaction_token_ids(token_index).value(0)];
 
     float class_weight = 1.0f;
     if (use_class_ids) {
