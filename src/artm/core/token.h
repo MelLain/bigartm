@@ -82,7 +82,15 @@ struct Token {
 
   Token(const ClassId& _class_id, const std::string& _keyword, const TransactionType& transaction_type)
     : keyword(_keyword), class_id(_class_id), transaction_type(transaction_type)
-    , hash_(calcHash(_class_id, _keyword, transaction_type)) { }
+    , hash_(calcHash(_class_id, _keyword, transaction_type)) {
+    for (const auto& elem : transaction_type.AsVector()) {
+      if (class_id == elem) {
+        return;
+      }
+    }
+    LOG(ERROR) << "Transaction type ( " << transaction_type.AsString() << " ) of token ( " << _keyword
+               << " ) does not contain token's class_id ( " << _class_id << " )";
+  }
 
   Token& operator=(const Token &rhs) {
     if (this != &rhs) {

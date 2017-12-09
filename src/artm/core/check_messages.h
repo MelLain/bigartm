@@ -647,7 +647,7 @@ inline void FixMessage(::artm::Batch* message) {
   }
 
   // Fill internal transaction_type field if it is not defined
-  if (message->transaction_type_size() > 0) {
+  if (message->transaction_type_size() == 0) {
     LOG(INFO) << "Batch " << message->id() << " is old and should be re-generated for processing speed-up";
     std::set<TransactionType> batch_tt;
     for (int item_id = 0; item_id < message->item_size(); ++item_id) {

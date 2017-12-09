@@ -46,6 +46,66 @@ const float kProcessorEps = 1e-16f;
 namespace artm {
 namespace core {
 
+namespace {
+std::vector<Token> GetBatchTokens(const Batch& batch) {
+  std::vector<Token> retval;
+  std::unordered_map<ClassId, std::set<TransactionType> > batch_tts;
+
+  for (const auto& ptt : batch.transaction_type()) {
+    std::vector<ClassId> class_ids = std::vector<ClassId>(ptt.value().begin(), ptt.value().end());
+    auto tt = TransactionType(class_ids);
+    for (const ClassId& class_id : class_ids) {
+      batch_tts[class_id].insert(tt);
+    }
+  }
+
+  for (int token_index = 0; token_index < batch.token_size(); ++token_index) {
+    std::string keyword = batch.token(token_index);
+    ClassId class_id = batch.class_id(token_index);
+    auto iter = batch_tts.find(class_id);
+    if (iter == batch_tts.end()) {
+      LOG(WARNING) << "Token " << keyword << " with class_id " << class_id
+        << " doesn't match any transaction from batch transaction_type and will be skipped";
+      continue;
+    }
+    for (const auto& tt : iter->second) {
+      retval.push_back(Token(class_id, keyword, tt));
+    }
+  }
+  return retval;
+}
+
+std::pair<std::map<std::vector<int>, int>, std::map<ClassId, std::set<TransactionType>>>
+GetBatchTransactions(const Batch& batch) {
+  std::map<std::vector<int>, int> transactions;
+  std::map<ClassId, std::set<TransactionType>> class_id_to_tt;
+
+  for (int item_index = 0; item_index < batch.item_size(); ++item_index) {
+    const Item& item = batch.item(item_index);
+
+    for (int index = 0; index < item.transaction_token_ids_size(); ++index) {
+      const auto& token_ids = item.transaction_token_ids(index).value();
+      const auto elem = std::vector<int>(token_ids.begin(), token_ids.end());
+      auto iter = transactions.find(elem);
+      if (iter == transactions.end()) {
+        transactions.insert(std::make_pair(elem, transactions.size()));
+      }
+
+      std::vector<ClassId> class_ids;
+      for (const int token_id : token_ids) {
+        class_ids.push_back(batch.class_id(token_id));
+      }
+      TransactionType tt(class_ids);
+      for (const ClassId& class_id : class_ids) {
+        class_id_to_tt[class_id].emplace(tt);
+      }
+    }
+  }
+  return std::make_pair(transactions, class_id_to_tt);
+}
+
+}
+
 class RegularizeThetaAgentCollection : public RegularizeThetaAgent {
  private:
   std::vector<std::shared_ptr<RegularizeThetaAgent>> agents_;
@@ -159,12 +219,6 @@ static void CreateThetaCacheEntry(ThetaMatrix* new_cache_entry_ptr,
   }
 }
 
-
-
-
-
-
-// TROUBLE
 static void CreatePtdwCacheEntry(ThetaMatrix* new_cache_entry_ptr,
                                  LocalPhiMatrix<float>* ptdw_matrix,
                                  const Batch& batch,
@@ -193,12 +247,6 @@ static void CreatePtdwCacheEntry(ThetaMatrix* new_cache_entry_ptr,
   }
 }
 
-
-
-
-
-
-// no need
 class NwtWriteAdapter {
  public:
   virtual void Store(int batch_token_id, int pwt_token_id, const std::vector<float>& nwt_vector) = 0;
@@ -235,12 +283,6 @@ Processor::~Processor() {
   }
 }
 
-
-
-
-
-
-// no need
 static std::shared_ptr<LocalThetaMatrix<float>>
 InitializeTheta(int topic_size, const Batch& batch, const ProcessBatchesArgs& args, const ThetaMatrix* cache) {
   auto Theta = std::make_shared<LocalThetaMatrix<float>>(topic_size, batch.item_size());
@@ -280,95 +322,19 @@ InitializeTheta(int topic_size, const Batch& batch, const ProcessBatchesArgs& ar
   return Theta;
 }
 
-
-
-
-
-
-// done
 static std::shared_ptr<LocalPhiMatrix<float>>
 InitializePhi(const Batch& batch,
               const ::artm::core::PhiMatrix& p_wt) {
+  std::vector<Token> tokens = GetBatchTokens(batch);
   bool phi_is_empty = true;
   int topic_size = p_wt.topic_size();
-
-  const bool use_transaction_data = (batch.item_size() > 0 && batch.item(0).transaction_token_ids_size() > 0);
-  const bool has_transaction_types = (batch.transaction_type_size() > 0);
-
-  if (has_transaction_types && !use_transaction_data) {
-    LOG(WARNING) << "Batch " << batch.id() << " has non-empty transaction_type field, but non-transaction items";
-  }
-
-  std::vector<Token> tokens;
-  if (use_transaction_data) {
-    std::unordered_map<ClassId, std::set<TransactionType> > batch_tts;
-    if (has_transaction_types) {
-      for (const auto& ptt : batch.transaction_type()) {
-        std::vector<ClassId> class_ids = std::vector<ClassId>(ptt.value().begin(), ptt.value().end());
-        auto tt = TransactionType(class_ids);
-        for (const ClassId& class_id : class_ids) {
-          batch_tts[class_id].insert(tt);
-        }
-      }
-    } else {
-      LOG(WARNING) << "Batch " << batch.id()
-                   << " seems to have transaction items without transaction_type field, "
-                   << "this can lead to process slowdown (likely batch was created manually or edited)";
-
-      for (int item_id = 0; item_id < batch.item_size(); ++item_id) {
-        const Item& item = batch.item(item_id);
-        for (int token_index = 0; token_index < item.token_weight_size(); ++token_index) {
-          if (item.transaction_token_ids_size() > 0) {
-            std::vector<ClassId> ptt;
-            for (const int token_id : item.transaction_token_ids(token_index).value()) {
-              ptt.push_back(batch.class_id(token_id));
-            }
-            if (!ptt.empty()) {
-              auto tt = TransactionType(ptt);
-              for (const ClassId& class_id : ptt) {
-                batch_tts[class_id].insert(tt);
-              }
-            } else {
-              LOG(WARNING) << "Item " << item_id << " in batch " << batch.id()
-                           << " has empty transaction_token_ids in position " << token_index
-                           << ", this token will be skipped";
-              continue;
-            }
-          } else {
-            LOG(ERROR) << "Batch " << batch.id() << " is incorrect: transaction_token_ids field "
-                       << "is using generally, but empty in item "
-                       << item_id << ". This item will be skipped";
-            continue;
-          }
-        }
-      }
-    }
-
-    for (int token_index = 0; token_index < batch.token_size(); ++token_index) {
-      std::string keyword = batch.token(token_index);
-      ClassId class_id = batch.class_id(token_index);
-      auto iter = batch_tts.find(class_id);
-      if (iter == batch_tts.end()) {
-        LOG(WARNING) << "Token " << keyword << " with class_id " << class_id
-                     << " don't match any transaction from batch transaction_type and will be skipped";
-        continue;
-      }
-      for (const auto& tt : iter->second) {
-        tokens.push_back(Token(class_id, keyword, tt));
-      }
-    }
-  } else {
-    for (int i = 0; i < batch.token_size(); ++i) {
-      tokens.push_back(Token(batch.class_id(i), batch.token(i)));
-    }
-  }
-
   auto phi_matrix = std::make_shared<LocalPhiMatrix<float>>(tokens.size(), topic_size);
   phi_matrix->InitializeZeros();
+
   for (int token_index = 0; token_index < tokens.size(); ++token_index) {
     Token token = tokens[token_index];
-
     int p_wt_token_index = p_wt.token_index(token);
+
     if (p_wt_token_index != ::artm::core::PhiMatrix::kUndefIndex) {
       phi_is_empty = false;
       for (int topic_index = 0; topic_index < topic_size; ++topic_index) {
@@ -391,12 +357,6 @@ InitializePhi(const Batch& batch,
   return phi_matrix;
 }
 
-
-
-
-
-
-// no need
 static void
 CreateRegularizerAgents(const Batch& batch, const ProcessBatchesArgs& args, Instance* instance,
                         RegularizeThetaAgentCollection* theta_agents, RegularizePtdwAgentCollection* ptdw_agents) {
@@ -423,11 +383,6 @@ CreateRegularizerAgents(const Batch& batch, const ProcessBatchesArgs& args, Inst
   }
 }
 
-
-
-
-
-
 static std::shared_ptr<CsrMatrix<float>>
 InitializeSparseNdw(const Batch& batch, const ProcessBatchesArgs& args) {
   std::vector<float> n_dw_val;
@@ -448,7 +403,6 @@ InitializeSparseNdw(const Batch& batch, const ProcessBatchesArgs& args) {
     n_dw_row_ptr.push_back(static_cast<int>(n_dw_val.size()));
     const Item& item = batch.item(item_index);
     for (int token_index = 0; token_index < item.transaction_token_ids_size(); ++token_index) {
-      // ToDo(MelLain): STUB
       int token_id = item.transaction_token_ids(token_index).value(0);
 
       float class_weight = 1.0f;
@@ -463,9 +417,156 @@ InitializeSparseNdw(const Batch& batch, const ProcessBatchesArgs& args) {
       n_dw_col_ind.push_back(token_id);
     }
   }
-
   n_dw_row_ptr.push_back(static_cast<int>(n_dw_val.size()));
   return std::make_shared<CsrMatrix<float>>(batch.token_size(), &n_dw_val, &n_dw_row_ptr, &n_dw_col_ind);
+}
+
+
+static std::shared_ptr<CsrMatrix<float>>
+InitializeSparseNdw_New(const Batch& batch, const ProcessBatchesArgs& args) {
+  std::vector<float> n_dw_val;
+  std::vector<int> n_dw_row_ptr;
+  std::vector<int> n_dw_col_ind;
+
+  bool use_classes = false;
+  std::map<ClassId, float> class_id_to_weight;
+  if (args.class_id_size() != 0) {
+    use_classes = true;
+    for (int i = 0; i < args.class_id_size(); ++i) {
+      class_id_to_weight.insert(std::make_pair(args.class_id(i), args.class_weight(i)));
+    }
+  }
+
+  std::vector<Token> tokens = GetBatchTokens(batch);
+  std::map<Token, int> token_to_index;
+  int idx = 0;
+  for (auto& token : tokens) {
+    token_to_index.emplace(std::make_pair(token, idx++));
+  }
+
+  // For sparse case
+  for (int item_index = 0; item_index < batch.item_size(); ++item_index) {
+    n_dw_row_ptr.push_back(static_cast<int>(n_dw_val.size()));
+    const Item& item = batch.item(item_index);
+    for (int token_index = 0; token_index < item.transaction_token_ids_size(); ++token_index) {
+      std::vector<ClassId> class_ids;
+      for (int token_id : item.transaction_token_ids(token_index).value()) {
+        class_ids.push_back(batch.class_id(token_id));
+      }
+
+      for (int token_id : item.transaction_token_ids(token_index).value()) {
+        float class_weight = 1.0f;
+        if (use_classes) {
+          ClassId class_id = batch.class_id(token_id);
+          auto iter = class_id_to_weight.find(class_id);
+          class_weight = (iter == class_id_to_weight.end()) ? 0.0f : iter->second;
+        }
+        TransactionType tt(class_ids);
+        const float token_weight = item.token_weight(token_index);
+        n_dw_val.push_back(class_weight * token_weight);
+        n_dw_col_ind.push_back(token_to_index.find(Token(batch.class_id(token_id), batch.token(token_id), tt))->second);
+      }
+    }
+  }
+  n_dw_row_ptr.push_back(static_cast<int>(n_dw_val.size()));
+  return std::make_shared<CsrMatrix<float>>(batch.token_size(), &n_dw_val, &n_dw_row_ptr, &n_dw_col_ind);
+}
+
+static int InitializeSparseTransactionNdw(const Batch& batch, const ::artm::core::PhiMatrix& p_wt,
+                                          const ProcessBatchesArgs& args,
+                                          CsrMatrix<float>** sparse_ndw,
+                                          CsrMatrix<int>** sparse_nmw) {
+  bool use_transactions = false;
+  std::map<TransactionType, float> tt_to_weight;
+  if (args.transaction_type_size() != 0) {
+    use_transactions = true;
+    for (int i = 0; i < args.transaction_type_size(); ++i) {
+      tt_to_weight.insert(std::make_pair(TransactionType(args.transaction_type(i).value()),
+                                         args.transaction_weight(i)));
+    }
+  }
+
+  auto result = GetBatchTransactions(batch);
+  std::map<std::vector<int>, int>& transaction_to_index = result.first;
+  std::map<ClassId, std::set<TransactionType>>& class_id_to_tt = result.second;
+
+  // create doc x transactions matrix (value == weight of transaction)
+  std::vector<float> n_dw_val;
+  std::vector<int> n_dw_row_ptr;
+  std::vector<int> n_dw_col_ind;
+
+  int max_doc_len = 0;
+  for (int item_index = 0; item_index < batch.item_size(); ++item_index) {
+    n_dw_row_ptr.push_back(static_cast<int>(n_dw_val.size()));
+    const Item& item = batch.item(item_index);
+    int cur_doc_len = 0;
+    for (int index = 0; index < item.transaction_token_ids_size(); ++index) {
+      float transaction_weight = 1.0f;
+      cur_doc_len += item.transaction_token_ids(index).value().size();
+      if (use_transactions) {
+        std::vector<ClassId> class_ids;
+        for (const int idx : item.transaction_token_ids(index).value()) {
+          class_ids.push_back(batch.class_id(idx));
+        }
+        auto iter = tt_to_weight.find(TransactionType(class_ids));
+        transaction_weight = (iter == tt_to_weight.end()) ? 0.0f : iter->second;
+      }
+
+      const float token_weight = item.token_weight(index);
+      n_dw_val.push_back(transaction_weight * token_weight);
+      const auto& token_ids = item.transaction_token_ids(index).value();
+      const auto elem = std::vector<int>(token_ids.begin(), token_ids.end());
+      n_dw_col_ind.push_back(transaction_to_index[elem]);
+    }
+    max_doc_len = max_doc_len < cur_doc_len ? cur_doc_len : max_doc_len;
+  }
+
+  n_dw_row_ptr.push_back(static_cast<int>(n_dw_val.size()));
+
+  // create modality (class_id) x transactions matrix (value == index in phi matrix)
+  std::vector<std::vector<Token>> transactions(transaction_to_index.size(), {});
+  for (const auto& elem : transaction_to_index) {
+    std::vector<Token> transaction;
+    for (const int e : elem.first) {
+      transaction.push_back(Token(batch.class_id(e), batch.token(e)));
+    }
+    transactions[elem.second] = transaction;
+  }
+
+  std::vector<int> n_mw_val;
+  std::vector<int> n_mw_row_ptr;
+  std::vector<int> n_mw_col_ind;
+
+  for (const auto& class_id_tts : class_id_to_tt) {
+    n_mw_row_ptr.push_back(static_cast<int>(n_mw_val.size()));
+    for (int transaction_index = 0; transaction_index < transactions.size(); ++transaction_index) {
+      const auto& transaction = transactions[transaction_index];
+      std::vector<ClassId> class_ids;
+      int index = -1;
+      for (int i = 0; i < transaction.size(); ++i) {
+        if (transaction[i].class_id == class_id_tts.first) {
+          index = i;
+        }
+        class_ids.push_back(transaction[i].class_id);
+      }
+
+      if (index == -1) {
+        continue;
+      }
+
+      const TransactionType tt(class_ids);
+      int token_index = p_wt.token_index(Token(transaction[index].class_id, transaction[index].keyword, tt));
+      n_mw_val.push_back(token_index);
+      n_mw_col_ind.push_back(transaction_index);
+    }
+  }
+
+  n_mw_row_ptr.push_back(static_cast<int>(n_mw_val.size()));
+
+  *sparse_ndw = new CsrMatrix<float>(transactions.size(), &n_dw_val, &n_dw_row_ptr, &n_dw_col_ind);
+  *sparse_nmw = new CsrMatrix<int>(transactions.size(), &n_mw_val, &n_mw_row_ptr, &n_mw_col_ind);
+
+  return max_doc_len;
 }
 
 
@@ -473,10 +574,9 @@ InitializeSparseNdw(const Batch& batch, const ProcessBatchesArgs& args) {
 
 
 
-
+// change
 static void
 InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch, float batch_weight,
-                             const CsrMatrix<float>& sparse_ndw,
                              const ::artm::core::PhiMatrix& p_wt,
                              const RegularizeThetaAgentCollection& theta_agents,
                              LocalThetaMatrix<float>* theta_matrix,
@@ -487,9 +587,26 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
   const int docs_count = theta_matrix->num_items();
   const int tokens_count = batch.token_size();
 
-  std::vector<int> token_id(batch.token_size(), -1);
-  for (int token_index = 0; token_index < batch.token_size(); ++token_index) {
-    token_id[token_index] = p_wt.token_index(Token(batch.class_id(token_index), batch.token(token_index)));
+  CsrMatrix<float>* sparse_ndw = nullptr;
+
+  auto result = GetBatchTransactions(batch);
+  std::map<std::vector<int>, int>& transaction_to_index = result.first;
+  std::map<ClassId, std::set<TransactionType>>& class_id_to_tt = result.second;
+  std::vector<std::vector<Token>> transactions(transaction_to_index.size(), {});
+  std::map<Token, int> token_to_local_index;
+  int token_index_local = 0;
+  for (const auto& elem : transaction_to_index) {
+    std::vector<Token> transaction;
+    std::vector<ClassId> class_ids;
+    for (const int e : elem.first) {
+      class_ids.push_back(batch.class_id(e));
+    }
+    for (const int e : elem.first) {
+      auto token = Token(batch.class_id(e), batch.token(e), TransactionType(class_ids));
+      token_to_local_index.emplace(std::make_pair(token, token_index_local++));
+      transaction.push_back(token);
+    }
+    transactions[elem.second] = transaction;
   }
 
   if (args.opt_for_avx()) {
@@ -500,13 +617,11 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
   //    makes compiler generate AVX instructions (vectorized 128-bit float-point operations)
   // 2. better memory usage (reduced bandwith to DRAM and more sequential accesss)
 
-  int max_local_token_size = 0;  // find the longest document from the batch
-  for (int d = 0; d < docs_count; ++d) {
-    const int begin_index = sparse_ndw.row_ptr()[d];
-    const int end_index = sparse_ndw.row_ptr()[d + 1];
-    const int local_token_size = end_index - begin_index;
-    max_local_token_size = std::max(max_local_token_size, local_token_size);
-  }
+  CsrMatrix<int>* sparse_nmw = nullptr;
+  auto temp = InitializeSparseNdw(batch, args);
+  auto sparse_ndw_2 = temp.get();
+  int max_local_token_size = InitializeSparseTransactionNdw(batch, p_wt, args, &sparse_ndw, &sparse_nmw);
+
   LocalPhiMatrix<float> local_phi(max_local_token_size, num_topics);
   LocalThetaMatrix<float> r_td(num_topics, 1);
   std::vector<float> helper_vector(num_topics, 0.0f);
@@ -515,20 +630,28 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
     float* ntd_ptr = &n_td(0, d);
     float* theta_ptr = &(*theta_matrix)(0, d);  // NOLINT
 
-    const int begin_index = sparse_ndw.row_ptr()[d];
-    const int end_index = sparse_ndw.row_ptr()[d + 1];
+    const int begin_index = sparse_ndw->row_ptr()[d];
+    const int end_index = sparse_ndw->row_ptr()[d + 1];
     local_phi.InitializeZeros();
     bool item_has_tokens = false;
     for (int i = begin_index; i < end_index; ++i) {
-      int w = sparse_ndw.col_ind()[i];
-      if (token_id[w] == ::artm::core::PhiMatrix::kUndefIndex) {
-        continue;
-      }
-      item_has_tokens = true;
-      float* local_phi_ptr = &local_phi(i - begin_index, 0);
-      p_wt.get(token_id[w], &helper_vector);
-      for (int k = 0; k < num_topics; ++k) {
-        local_phi_ptr[k] = helper_vector[k];
+      auto& transaction = transactions[i - begin_index];
+      for (const auto& token : transaction) {
+        if (p_wt.token_index(token) == ::artm::core::PhiMatrix::kUndefIndex) {
+          continue;
+        }
+
+        auto iter = token_to_local_index.find(token);
+        if (iter == token_to_local_index.end()) {
+          continue;
+        }
+
+        item_has_tokens = true;
+        float* local_phi_ptr = &local_phi(iter->second, 0);
+        p_wt.get(p_wt.token_index(token), &helper_vector);
+        for (int k = 0; k < num_topics; ++k) {
+          local_phi_ptr[k] = helper_vector[k];
+        }
       }
     }
 
@@ -542,19 +665,30 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
       }
 
       for (int i = begin_index; i < end_index; ++i) {
-        const float* phi_ptr = &local_phi(i - begin_index, 0);
+        std::vector<float> values(num_topics, 1.0f);
+        auto& transaction = transactions[i - begin_index];
+        for (const auto& token : transaction) {
+          auto iter = token_to_local_index.find(token);
+          if (iter == token_to_local_index.end()) {
+            continue;
+          }
+          const float* phi_ptr = &local_phi(iter->second, 0);
+          for (int k = 0; k < num_topics; ++k) {
+            values[k] *= phi_ptr[k];
+          }
+        }
 
         float p_dw_val = 0;
         for (int k = 0; k < num_topics; ++k) {
-          p_dw_val += phi_ptr[k] * theta_ptr[k];
+          p_dw_val += values[k] * theta_ptr[k];
         }
         if (p_dw_val == 0) {
           continue;
         }
 
-        const float alpha = sparse_ndw.val()[i] / p_dw_val;
+        const float alpha = sparse_ndw->val()[i] / p_dw_val;
         for (int k = 0; k < num_topics; ++k) {
-          ntd_ptr[k] += alpha * phi_ptr[k];
+          ntd_ptr[k] += alpha * values[k];
         }
       }
 
@@ -567,6 +701,9 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
     }
   }
   } else {
+    auto temp = InitializeSparseNdw(batch, args);
+    sparse_ndw = temp.get();
+    
   std::shared_ptr<LocalPhiMatrix<float>> phi_matrix_ptr = InitializePhi(batch, p_wt);
   if (phi_matrix_ptr == nullptr) {
     return;
@@ -578,13 +715,13 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
     helper_td.InitializeZeros();
 
     for (int d = 0; d < docs_count; ++d) {
-      for (int i = sparse_ndw.row_ptr()[d]; i < sparse_ndw.row_ptr()[d + 1]; ++i) {
-        int w = sparse_ndw.col_ind()[i];
+      for (int i = sparse_ndw->row_ptr()[d]; i < sparse_ndw->row_ptr()[d + 1]; ++i) {
+        int w = sparse_ndw->col_ind()[i];
         float p_dw_val = blas->sdot(num_topics, &phi_matrix(w, 0), 1, &(*theta_matrix)(0, d), 1);  // NOLINT
         if (p_dw_val == 0) {
           continue;
         }
-        blas->saxpy(num_topics, sparse_ndw.val()[i] / p_dw_val, &phi_matrix(w, 0), 1, &helper_td(0, d), 1);
+        blas->saxpy(num_topics, sparse_ndw->val()[i] / p_dw_val, &phi_matrix(w, 0), 1, &helper_td(0, d), 1);
       }
     }
 
@@ -601,16 +738,25 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
     return;
   }
 
-  CsrMatrix<float> sparse_nwd(sparse_ndw);
+  // rewrite this fragment using formules
+  auto temp = InitializeSparseNdw_New(batch, args);
+  sparse_ndw = temp.get();
+  CsrMatrix<float> sparse_nwd(*sparse_ndw);
   sparse_nwd.Transpose(blas);
 
   std::vector<float> p_wt_local(num_topics, 0.0f);
   std::vector<float> n_wt_local(num_topics, 0.0f);
-  for (int w = 0; w < tokens_count; ++w) {
-    if (token_id[w] == -1) {
+
+  auto tokens = GetBatchTokens(batch);
+  for (int w = 0; w < tokens.size(); ++w) {
+    auto r = tokens[w];
+    auto t = p_wt.token_index(r);
+
+    if (t == -1) {
       continue;
     }
-    p_wt.get(token_id[w], &p_wt_local);
+
+    p_wt.get(t, &p_wt_local);
 
     for (int i = sparse_nwd.row_ptr()[w]; i < sparse_nwd.row_ptr()[w + 1]; ++i) {
       int d = sparse_nwd.col_ind()[i];
@@ -631,7 +777,7 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
     for (float& value : values) {
       value *= batch_weight;
     }
-    nwt_writer->Store(w, token_id[w], values);
+    nwt_writer->Store(w, p_wt.token_index(tokens[w]), values);
   }
 }
 
@@ -643,7 +789,6 @@ InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch,
 
 static void
 InferPtdwAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch, float batch_weight,
-                            const CsrMatrix<float>& sparse_ndw,
                             const ::artm::core::PhiMatrix& p_wt,
                             const RegularizeThetaAgentCollection& theta_agents,
                             const RegularizePtdwAgentCollection& ptdw_agents,
@@ -657,6 +802,8 @@ InferPtdwAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch, 
   const int num_topics = p_wt.topic_size();
   const int docs_count = theta_matrix->num_items();
 
+  std::shared_ptr<CsrMatrix<float>> sparse_ndw = InitializeSparseNdw(batch, args);
+
   std::vector<int> token_id(batch.token_size(), -1);
   for (int token_index = 0; token_index < batch.token_size(); ++token_index) {
     token_id[token_index] = p_wt.token_index(Token(batch.class_id(token_index), batch.token(token_index)));
@@ -666,15 +813,15 @@ InferPtdwAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch, 
     float* ntd_ptr = &n_td(0, d);
     float* theta_ptr = &(*theta_matrix)(0, d);  // NOLINT
 
-    const int begin_index = sparse_ndw.row_ptr()[d];
-    const int end_index = sparse_ndw.row_ptr()[d + 1];
+    const int begin_index = sparse_ndw->row_ptr()[d];
+    const int end_index = sparse_ndw->row_ptr()[d + 1];
     const int local_token_size = end_index - begin_index;
     LocalPhiMatrix<float> local_phi(local_token_size, num_topics);
     LocalPhiMatrix<float> local_ptdw(local_token_size, num_topics);
     local_phi.InitializeZeros();
     bool item_has_tokens = false;
     for (int i = begin_index; i < end_index; ++i) {
-      int w = sparse_ndw.col_ind()[i];
+      int w = sparse_ndw->col_ind()[i];
       if (token_id[w] == ::artm::core::PhiMatrix::kUndefIndex) {
         continue;
       }
@@ -718,7 +865,7 @@ InferPtdwAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch, 
           ntd_ptr[k] = 0.0f;
         }
         for (int i = begin_index; i < end_index; ++i) {
-          const float n_dw = sparse_ndw.val()[i];
+          const float n_dw = sparse_ndw->val()[i];
           const float* ptdw_ptr = &local_ptdw(i - begin_index, 0);
           for (int k = 0; k < num_topics; ++k) {
             ntd_ptr[k] += n_dw * ptdw_ptr[k];
@@ -735,14 +882,14 @@ InferPtdwAndUpdateNwtSparse(const ProcessBatchesArgs& args, const Batch& batch, 
         if (nwt_writer != nullptr) {
           std::vector<float> values(num_topics, 0.0f);
           for (int i = begin_index; i < end_index; ++i) {
-            const float n_dw = batch_weight * sparse_ndw.val()[i];
+            const float n_dw = batch_weight * sparse_ndw->val()[i];
             const float* ptdw_ptr = &local_ptdw(i - begin_index, 0);
 
             for (int k = 0; k < num_topics; ++k) {
               values[k] = ptdw_ptr[k] * n_dw;
             }
 
-            int w = sparse_ndw.col_ind()[i];
+            int w = sparse_ndw->col_ind()[i];
             nwt_writer->Store(w, token_id[w], values);
           }
         }
@@ -902,12 +1049,6 @@ void Processor::ThreadFunction() {
         }
         VLOG(0) << "Processor: start processing batch " << batch.id() << " into model " << model_description.str();
 
-        std::shared_ptr<CsrMatrix<float>> sparse_ndw;
-        {
-          CuckooWatch cuckoo2("InitializeSparseNdw", &cuckoo, kTimeLoggingThreshold);
-          sparse_ndw = InitializeSparseNdw(batch, args);
-        }
-
         std::shared_ptr<ThetaMatrix> cache;
         if (part->has_reuse_theta_cache_manager()) {
           cache = part->reuse_theta_cache_manager()->FindCacheEntry(batch);
@@ -951,12 +1092,12 @@ void Processor::ThreadFunction() {
 
           if (ptdw_agents.empty() && !part->has_ptdw_cache_manager()) {
             CuckooWatch cuckoo2("InferThetaAndUpdateNwtSparse", &cuckoo, kTimeLoggingThreshold);
-            InferThetaAndUpdateNwtSparse(args, batch, part->batch_weight(), *sparse_ndw,
+            InferThetaAndUpdateNwtSparse(args, batch, part->batch_weight(),
                                          p_wt, theta_agents, theta_matrix.get(), nwt_writer.get(),
                                          blas, new_cache_entry_ptr.get());
           } else {
             CuckooWatch cuckoo2("InferPtdwAndUpdateNwtSparse", &cuckoo, kTimeLoggingThreshold);
-            InferPtdwAndUpdateNwtSparse(args, batch, part->batch_weight(), *sparse_ndw,
+            InferPtdwAndUpdateNwtSparse(args, batch, part->batch_weight(),
                                         p_wt, theta_agents, ptdw_agents, theta_matrix.get(), nwt_writer.get(),
                                         blas, new_cache_entry_ptr.get(),
                                         new_ptdw_cache_entry_ptr.get());

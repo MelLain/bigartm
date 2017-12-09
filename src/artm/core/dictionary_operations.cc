@@ -46,7 +46,7 @@ std::shared_ptr<Dictionary> DictionaryOperations::Create(const DictionaryData& d
       bool has_token_value = data.token_value_size() > 0;
       bool has_token_tf = data.token_tf_size() > 0;
       bool has_token_df = data.token_df_size() > 0;
-      dictionary->AddEntry(DictionaryEntry(Token(class_id, data.token(index), TransactionType()),
+      dictionary->AddEntry(DictionaryEntry(Token(class_id, data.token(index)),
         has_token_value ? data.token_value(index) : 0.0f,
         has_token_tf ? data.token_tf(index) : 0.0f,
         has_token_df ? data.token_df(index) : 0.0f));
@@ -219,7 +219,7 @@ std::shared_ptr<Dictionary> DictionaryOperations::Import(const ImportDictionaryA
       dictionary->SetNumItems(dict_data.num_items_in_collection());
       for (int token_id = 0; token_id < dict_data.token_size(); ++token_id) {
         dictionary->AddEntry(DictionaryEntry(
-          Token(dict_data.class_id(token_id), dict_data.token(token_id), TransactionType()),
+          Token(dict_data.class_id(token_id), dict_data.token(token_id)),
           dict_data.token_value(token_id), dict_data.token_tf(token_id), dict_data.token_df(token_id)));
       }
     }
