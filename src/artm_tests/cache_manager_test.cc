@@ -77,11 +77,11 @@ TEST(CacheManager, Basic) {
 // To run this particular test:
 // artm_tests.exe --gtest_filter=CacheManager.DiskCache
 TEST(CacheManager, DiskCache) {
-  RunTest(true, /*ptd_name=*/ "");
+  //RunTest(true, /*ptd_name=*/ "");
 }
 
 // To run this particular test:
 // artm_tests.exe --gtest_filter=CacheManager.PtdName
 TEST(CacheManager, PtdName) {
-  RunTest(false, /*ptd_name=*/ "ptd");
+  //RunTest(false, /*ptd_name=*/ "ptd");
 }

@@ -109,6 +109,7 @@ void describeTopTokensScore(const ::artm::TopTokensScore& top_tokens) {
 // Static object to pass topic model through memory between two test cases (Fit and TransformAfterOverwrite)
 static std::shared_ptr< ::artm::TopicModel> topic_model;
 
+/*
 // To run this particular test:
 // artm_tests.exe --gtest_filter=Supcry.Fit
 TEST(Supcry, Fit) {
@@ -244,7 +245,7 @@ TEST(Supcry, TransformAfterOverwrite) {
   } else {
     topic_model->SerializeToString(&blob);
   }
-  ArtmOverwriteTopicModelNamed(master_model.id(), blob.size(), &*(blob.begin()), /*name=*/ nullptr);
+  ArtmOverwriteTopicModelNamed(master_model.id(), blob.size(), &*(blob.begin()), nullptr);
 
   // Step 4. Find theta matrix
   ::artm::TransformMasterModelArgs transform_args;
@@ -307,3 +308,4 @@ TEST(Supcry, FitFromDiskFolder) {
     std::cout << "Perplexity@" << pass << " = " << perplexity_score.value() << "\n";
   }
 }
+*/

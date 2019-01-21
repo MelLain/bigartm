@@ -417,7 +417,7 @@ TEST(CppInterface, BasicTrasactionTest) {
 TEST(CppInterface, ProcessBatchesApi) {
   int nTopics = 17;
   int nBatches = 5;
-
+  /*
   std::string target_folder = artm::test::Helpers::getUniqueString();
   ASSERT_TRUE(boost::filesystem::create_directory(target_folder));
 
@@ -617,6 +617,7 @@ TEST(CppInterface, ProcessBatchesApi) {
 
   try { boost::filesystem::remove_all(target_folder); }
   catch (...) { }
+  */
 }
 
 // artm_tests.exe --gtest_filter=CppInterface.AttachModel
@@ -689,6 +690,7 @@ TEST(CppInterface, AttachModel) {
 
 // artm_tests.exe --gtest_filter=CppInterface.AsyncProcessBatches
 TEST(CppInterface, AsyncProcessBatches) {
+  /*
   int nTopics = 17, nBatches = 5, nTokens = 50;
   auto batches = ::artm::test::TestMother::GenerateBatches(nBatches, nTokens);
   artm::MasterModelConfig master_config = ::artm::test::TestMother::GenerateMasterModelConfig(nTopics);
@@ -722,6 +724,7 @@ TEST(CppInterface, AsyncProcessBatches) {
   normalize_model_args.set_pwt_target_name("pwt");
   normalize_model_args.set_nwt_source_name("nwt_merge");
   api.NormalizeModel(normalize_model_args);
+  */
 }
 
 // artm_tests.exe --gtest_filter=CppInterface.Dictionaries

@@ -389,7 +389,10 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
                                                     const RegularizeThetaAgentCollection& theta_agents,
                                                     LocalThetaMatrix<float>* theta_matrix,
                                                     NwtWriteAdapter* nwt_writer,
+                                                    NwtWriteAdapter* nwt_writer_temp,
                                                     util::Blas* blas,
+                                                    const std::vector<float>& n_t,
+                                                    bool useRebalance,
                                                     ThetaMatrix* new_cache_entry_ptr) {
   LocalThetaMatrix<float> n_td(theta_matrix->num_topics(), theta_matrix->num_items());
   const int num_topics = p_wt.topic_size();
@@ -399,7 +402,9 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
   std::vector<int> token_id;
   ProcessorHelpers::FindBatchTokenIds(batch, p_wt, &token_id);
 
-  if (args.opt_for_avx()) {
+  //if (args.opt_for_avx()) {
+  bool opt_for_avx = true;
+  if (opt_for_avx) {
     // This version is about 40% faster than the second alternative below.
     // Both versions return 100% equal results.
     // Speedup is due to several factors:
@@ -454,7 +459,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
 
           float p_dw_val = 0.0f;
           for (int k = 0; k < num_topics; ++k) {
-            p_dw_val += phi_ptr[k] * theta_ptr[k];
+            p_dw_val += (phi_ptr[k] * theta_ptr[k] / (useRebalance ? n_t[k] : 1.0f));
           }
           if (isZero(p_dw_val)) {
             continue;
@@ -462,7 +467,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
 
           const float alpha = sparse_ndw.val()[i] / p_dw_val;
           for (int k = 0; k < num_topics; ++k) {
-            ntd_ptr[k] += alpha * phi_ptr[k];
+            ntd_ptr[k] += alpha * phi_ptr[k] / (useRebalance ? n_t[k] : 1.0f);
           }
         }
 
@@ -528,6 +533,12 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
       p_wt_local.assign(num_topics, 1.0f);
     }
 
+    if (useRebalance) {
+      for (int k = 0; k < num_topics; ++k) {
+        p_wt_local[k] /= n_t[k];
+      }
+    }
+
     for (int i = sparse_nwd.row_ptr()[w]; i < sparse_nwd.row_ptr()[w + 1]; ++i) {
       int d = sparse_nwd.col_ind()[i];
       float p_wd_val = blas->sdot(num_topics, &p_wt_local[0], 1, &(*theta_matrix)(0, d), 1);  // NOLINT
@@ -548,6 +559,42 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
       value *= batch_weight;
     }
     nwt_writer->Store(token_nwt_id[w], values);
+  }
+
+
+  // simple copy-paste to compute temp n_wt for further n_t computation
+  for (int w = 0; w < tokens_count; ++w) {
+    if (token_nwt_id[w] == -1) {
+      continue;
+    }
+
+    if (token_id[w] != -1) {
+      p_wt.get(token_id[w], &p_wt_local);
+    }
+    else {
+      p_wt_local.assign(num_topics, 1.0f);
+    }
+
+    for (int i = sparse_nwd.row_ptr()[w]; i < sparse_nwd.row_ptr()[w + 1]; ++i) {
+      int d = sparse_nwd.col_ind()[i];
+      float p_wd_val = blas->sdot(num_topics, &p_wt_local[0], 1, &(*theta_matrix)(0, d), 1);  // NOLINT
+      if (isZero(p_wd_val)) {
+        continue;
+      }
+      blas->saxpy(num_topics, sparse_nwd.val()[i] / p_wd_val,
+        &(*theta_matrix)(0, d), 1, &n_wt_local[0], 1);  // NOLINT
+    }
+
+    std::vector<float> values(num_topics, 0.0f);
+    for (int topic_index = 0; topic_index < num_topics; ++topic_index) {
+      values[topic_index] = p_wt_local[topic_index] * n_wt_local[topic_index];
+      n_wt_local[topic_index] = 0.0f;
+    }
+
+    for (float& value : values) {
+      value *= batch_weight;
+    }
+    nwt_writer_temp->Store(token_nwt_id[w], values);
   }
 }
 

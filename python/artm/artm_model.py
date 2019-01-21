@@ -107,7 +107,7 @@ class ARTM(object):
                  transaction_typenames=None, scores=None, regularizers=None, num_document_passes=10,
                  reuse_theta=False, dictionary=None, cache_theta=False, theta_columns_naming='id',
                  seed=-1, show_progress_bars=False, theta_name=None,
-                 parent_model=None, parent_model_weight=None):
+                 parent_model=None, parent_model_weight=None, use_rebalance=None):
         """
         :param int num_topics: the number of topics in model, will be overwrited if\
                                  topic_names is set
@@ -195,6 +195,8 @@ class ARTM(object):
         self._show_progress_bars = show_progress_bars
         self._pool = ArtmThreadPool(asynchronous=show_progress_bars)
 
+        self._use_rebalance = False
+
         if topic_names is not None:
             self._topic_names = topic_names
         elif num_topics is not None:
@@ -226,6 +228,9 @@ class ARTM(object):
         if isinstance(reuse_theta, bool):
             self._reuse_theta = reuse_theta
 
+        if isinstance(use_rebalance, bool):
+            self._use_rebalance = use_rebalance
+
         if isinstance(num_document_passes, int):
             self._num_document_passes = num_document_passes
 
@@ -255,6 +260,7 @@ class ARTM(object):
                                           cache_theta=self._cache_theta,
                                           parent_model_id=self._parent_model_id,
                                           parent_model_weight=self._parent_model_weight,
+                                          use_rebalance=self._use_rebalance,
                                           config=master_config)
 
         self._regularizers = Regularizers(self._master)
@@ -329,6 +335,10 @@ class ARTM(object):
     @property
     def reuse_theta(self):
         return self._reuse_theta
+
+    @property
+    def use_rebalance(self):
+        return self._use_rebalance
 
     @property
     def num_document_passes(self):
@@ -472,6 +482,14 @@ class ARTM(object):
         else:
             self.master.reconfigure(reuse_theta=reuse_theta)
             self._reuse_theta = reuse_theta
+
+    @use_rebalance.setter
+    def use_rebalance(self, use_rebalance):
+        if not isinstance(use_rebalance, bool):
+            raise IOError('use_rebalance should be bool')
+        else:
+            self.master.reconfigure(use_rebalance=use_rebalance)
+            self._use_rebalance = use_rebalance
 
     @num_online_processed_batches.setter
     def num_online_processed_batches(self, num_online_processed_batches):

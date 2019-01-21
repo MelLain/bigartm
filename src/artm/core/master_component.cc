@@ -789,6 +789,23 @@ void MasterComponent::RequestProcessBatchesImpl(const ProcessBatchesArgs& proces
     }
   }
 
+  auto current_nwt_temp = instance_->GetPhiMatrix(NwtTempToWriteName);
+  auto current_nwt_temp2 = instance_->GetPhiMatrix(NwtTempToReadName);
+
+  // put new counters into reserved matrix and clear temp target one
+  if (current_nwt_temp != nullptr && current_nwt_temp2 != nullptr) {
+    instance_->SetPhiMatrix(NwtTempToReadName, instance_->GetPhiMatrixSafeNonConst(NwtTempToWriteName));
+    PhiMatrixOperations::AssignValue(0.0f, const_cast<::artm::core::PhiMatrix*>(current_nwt_temp.get()));
+  } else {
+    auto nwt_temp(std::make_shared<DensePhiMatrix>(NwtTempToWriteName, p_wt.topic_name()));
+    nwt_temp->Reshape(p_wt);
+    instance_->SetPhiMatrix(NwtTempToWriteName, nwt_temp);
+
+    auto nwt_temp2(std::make_shared<DensePhiMatrix>(NwtTempToReadName, p_wt.topic_name()));
+    nwt_temp2->Reshape(p_wt);
+    instance_->SetPhiMatrix(NwtTempToReadName, nwt_temp2);
+  }
+
   if (asynchronous && args.theta_matrix_type() != ThetaMatrixType_None) {
     BOOST_THROW_EXCEPTION(InvalidOperation(
         "ArtmAsyncProcessBatches require ProcessBatchesArgs.theta_matrix_type to be set to None"));
@@ -927,6 +944,12 @@ void MasterComponent::MergeModel(const MergeModelArgs& merge_model_args) {
   std::shared_ptr<DensePhiMatrix> nwt_target = std::make_shared<DensePhiMatrix>(
     merge_model_args.nwt_target_name(), merge_model_args.topic_name());
 
+  std::shared_ptr<DensePhiMatrix> nwt_temp = std::make_shared<DensePhiMatrix>(
+    NwtTempToWriteName, merge_model_args.topic_name());
+
+  std::shared_ptr<DensePhiMatrix> nwt_temp2 = std::make_shared<DensePhiMatrix>(
+    NwtTempToReadName, merge_model_args.topic_name());
+
   std::shared_ptr<Dictionary> dictionary = nullptr;
   if (merge_model_args.has_dictionary_name()) {
     dictionary = instance_->dictionaries()->get(merge_model_args.dictionary_name());
@@ -937,6 +960,8 @@ void MasterComponent::MergeModel(const MergeModelArgs& merge_model_args) {
 
     for (int token_index = 0; token_index < (int64_t) dictionary->size(); ++token_index) {
       nwt_target->AddToken(dictionary->entry(token_index)->token());
+      nwt_temp->AddToken(dictionary->entry(token_index)->token());
+      nwt_temp2->AddToken(dictionary->entry(token_index)->token());
     }
   }
 

@@ -36,6 +36,8 @@ typedef std::string TopicName;
 const int UnknownId = -1;
 
 const std::string kBatchExtension = ".batch";
+const std::string NwtTempToWriteName = "nwt_temp_to_write";
+const std::string NwtTempToReadName = "nwt_temp_to_read";
 
 const int kIdleLoopFrequency = 1;  // 1 ms
 

@@ -69,6 +69,7 @@ class Instance {
 
   std::shared_ptr<const ::artm::core::PhiMatrix> GetPhiMatrix(ModelName model_name) const;
   std::shared_ptr<const ::artm::core::PhiMatrix> GetPhiMatrixSafe(ModelName model_name) const;
+  std::shared_ptr<::artm::core::PhiMatrix> GetPhiMatrixSafeNonConst(ModelName model_name);
   void SetPhiMatrix(ModelName model_name, std::shared_ptr< ::artm::core::PhiMatrix> phi_matrix);
 
  private:

@@ -149,7 +149,7 @@ def _prepare_config(topic_names=None, class_ids=None, transaction_typenames=None
                     scores=None, regularizers=None, num_processors=None,
                     pwt_name=None, nwt_name=None, num_document_passes=None,
                     reuse_theta=None, cache_theta=None,
-                    parent_model_id=None, parent_model_weight=None, args=None):
+                    parent_model_id=None, parent_model_weight=None, use_rebalance=None, args=None):
         master_config = messages.MasterModelConfig()
 
         if args is not None:
@@ -199,6 +199,9 @@ def _prepare_config(topic_names=None, class_ids=None, transaction_typenames=None
         if reuse_theta is not None:
             master_config.reuse_theta = reuse_theta
 
+        if use_rebalance is not None:
+            master_config.use_rebalance = use_rebalance
+
         if cache_theta is not None:
             master_config.cache_theta = cache_theta
 
@@ -225,7 +228,7 @@ class MasterComponent(object):
     def __init__(self, library=None, topic_names=None, class_ids=None, transaction_typenames=None,
                  scores=None, regularizers=None, num_processors=None, pwt_name=None,
                  nwt_name=None, num_document_passes=None, reuse_theta=None,
-                 cache_theta=False, parent_model_id=None, parent_model_weight=None,
+                 cache_theta=False, parent_model_id=None, parent_model_weight=None, use_rebalance=None,
                  config=None, master_id=None):
         """
 
@@ -263,6 +266,7 @@ class MasterComponent(object):
                                         cache_theta=cache_theta,
                                         parent_model_id=parent_model_id,
                                         parent_model_weight=parent_model_weight,
+                                        use_rebalance=use_rebalance,
                                         args=config)
 
         self._config = master_config
@@ -276,7 +280,7 @@ class MasterComponent(object):
     def reconfigure(self, topic_names=None, class_ids=None, transaction_typenames=None,
                     scores=None, regularizers=None, num_processors=None, pwt_name=None,
                     nwt_name=None, num_document_passes=None, reuse_theta=None, cache_theta=None,
-                    parent_model_id=None, parent_model_weight=None):
+                    parent_model_id=None, parent_model_weight=None, use_rebalance=None):
         master_config = _prepare_config(topic_names=topic_names,
                                         class_ids=class_ids,
                                         transaction_typenames=transaction_typenames,
@@ -290,6 +294,7 @@ class MasterComponent(object):
                                         cache_theta=cache_theta,
                                         parent_model_id=parent_model_id,
                                         parent_model_weight=parent_model_weight,
+                                        use_rebalance=use_rebalance,
                                         args=self._config)
 
         self._config = master_config

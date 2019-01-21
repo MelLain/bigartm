@@ -178,7 +178,10 @@ class ProcessorHelpers {
                                            const RegularizeThetaAgentCollection& theta_agents,
                                            LocalThetaMatrix<float>* theta_matrix,
                                            NwtWriteAdapter* nwt_writer,
+                                           NwtWriteAdapter* nwt_writer_temp,
                                            util::Blas* blas,
+                                           const std::vector<float>& n_t,
+                                           bool useRebalance,
                                            ThetaMatrix* new_cache_entry_ptr = nullptr);
 
   ProcessorHelpers() = delete;

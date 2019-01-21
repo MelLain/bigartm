@@ -456,6 +456,15 @@ Instance::GetPhiMatrixSafe(ModelName model_name) const {
   return retval;
 }
 
+std::shared_ptr<::artm::core::PhiMatrix>
+Instance::GetPhiMatrixSafeNonConst(ModelName model_name) {
+  std::shared_ptr<PhiMatrix> retval = models_.get(model_name);
+  if (retval == nullptr) {
+    BOOST_THROW_EXCEPTION(InvalidOperation("Model " + model_name + " does not exist2"));
+  }
+  return retval;
+}
+
 void Instance::SetPhiMatrix(ModelName model_name, std::shared_ptr< ::artm::core::PhiMatrix> phi_matrix) {
   models_.erase(model_name);
   if (phi_matrix != nullptr) {

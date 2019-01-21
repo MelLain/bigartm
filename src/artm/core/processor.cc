@@ -113,6 +113,8 @@ void Processor::ThreadFunction() {
       }
 
       std::shared_ptr<MasterModelConfig> master_config = instance_->config();
+      bool useRebalance = master_config->use_rebalance();
+      LOG(INFO) << "Use rebalance: " << useRebalance;
 
       const ModelName& model_name = part->model_name();
       const ProcessBatchesArgs& args = part->args();
@@ -146,6 +148,36 @@ void Processor::ThreadFunction() {
           if (nwt_target == nullptr) {
             LOG(ERROR) << "Model " << part->nwt_target_name() << " does not exist.";
             continue;
+          }
+        }
+
+        std::shared_ptr<const PhiMatrix> nwt_temp;
+        nwt_temp = instance_->GetPhiMatrix(NwtTempToWriteName);
+        if (nwt_temp == nullptr) {
+          LOG(ERROR) << "--Model " << NwtTempToWriteName << " does not exist.";
+          continue;
+        }
+
+        std::shared_ptr<const PhiMatrix> nwt_temp2;
+        nwt_temp2 = instance_->GetPhiMatrix(NwtTempToReadName);
+        if (nwt_temp2 == nullptr) {
+          LOG(ERROR) << "----Model " << NwtTempToReadName << " does not exist.";
+          continue;
+        }
+
+        std::shared_ptr<NwtWriteAdapter> nwt_writer_temp;
+        if (nwt_temp != nullptr) {
+          nwt_writer_temp = std::make_shared<NwtWriteAdapter>(const_cast<PhiMatrix*>(nwt_temp.get()));
+        }
+
+        std::vector<float> n_t = std::vector<float>(p_wt.topic_size(), 1.0f);
+        if (nwt_temp2 != nullptr && nwt_temp2->token_size()) {
+          // this line hardcodes default class usage, it's totally unsafe and forbides usage of multimodal models
+          auto temp = PhiMatrixOperations::FindNormalizers(*nwt_temp2).find(DefaultClass)->second;
+          for (int i = 0; i < temp.size(); ++i) {
+            if (temp[i] > 1e-16f) {
+              n_t[i] = temp[i];
+            }
           }
         }
 
@@ -242,8 +274,8 @@ void Processor::ThreadFunction() {
             if (ptdw_agents.empty() && !part->has_ptdw_cache_manager()) {
               CuckooWatch cuckoo2("InferThetaAndUpdateNwtSparse", &cuckoo, kTimeLoggingThreshold);
               ProcessorHelpers::InferThetaAndUpdateNwtSparse(args, batch, part->batch_weight(), *sparse_ndw, p_wt,
-                                                             theta_agents, theta_matrix.get(), nwt_writer.get(),
-                                                             blas, new_cache_entry_ptr.get());
+                                                             theta_agents, theta_matrix.get(), nwt_writer.get(), nwt_writer_temp.get(),
+                                                             blas, n_t, useRebalance, new_cache_entry_ptr.get());
             } else {
               CuckooWatch cuckoo2("InferPtdwAndUpdateNwtSparse", &cuckoo, kTimeLoggingThreshold);
               ProcessorHelpers::InferPtdwAndUpdateNwtSparse(args, batch, part->batch_weight(), *sparse_ndw,
