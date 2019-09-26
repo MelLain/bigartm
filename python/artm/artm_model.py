@@ -1263,7 +1263,8 @@ class ARTM(object):
 
 
 def version():
-    return ARTM(num_topics=1).library_version
+    return '3'
+    #return ARTM(num_topics=1).library_version
 
 
 def load_artm_model(data_path):

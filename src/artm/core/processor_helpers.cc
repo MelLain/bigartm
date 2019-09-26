@@ -1,6 +1,7 @@
 // Copyright 2018, Additive Regularization of Topic Models.
 
 #include <algorithm>
+#include <random>
 
 #include "artm/core/processor_helpers.h"
 
@@ -419,6 +420,8 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
     LocalThetaMatrix<float> r_td(num_topics, 1);
     std::vector<float> helper_vector(num_topics, 0.0f);
 
+    std::default_random_engine generator;
+
     for (int d = 0; d < docs_count; ++d) {
       float* ntd_ptr = &n_td(0, d);
       float* theta_ptr = &(*theta_matrix)(0, d);  // NOLINT
@@ -427,17 +430,31 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
       const int end_index = sparse_ndw.row_ptr()[d + 1];
       local_phi.InitializeZeros();
       bool item_has_tokens = false;
+
+
+      std::vector<float> p_tdw(num_topics, 0.0f);
+
       for (int i = begin_index; i < end_index; ++i) {
         int w = sparse_ndw.col_ind()[i];
         if (token_id[w] == ::artm::core::PhiMatrix::kUndefIndex) {
           continue;
         }
+
+
+
         item_has_tokens = true;
         float* local_phi_ptr = &local_phi(i - begin_index, 0);
         p_wt.get(token_id[w], &helper_vector);
+
+
+
+        // СОЗДАНИЕ МАТРИЦЫ - ПОКА ФИКСИРОВАНО
         for (int k = 0; k < num_topics; ++k) {
           local_phi_ptr[k] = helper_vector[k];
         }
+
+
+
       }
 
       if (!item_has_tokens) {
@@ -445,13 +462,55 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
       }
 
       for (int inner_iter = 0; inner_iter < args.num_document_passes(); ++inner_iter) {
+
+
+
+
+        // ЗАНУЛЕНИЕ - ПОПРОБОВАТЬ СДЕЛАТЬ АЛГОРИТМОМ
         for (int k = 0; k < num_topics; ++k) {
           ntd_ptr[k] = 0.0f;
         }
 
+
+
+
         for (int i = begin_index; i < end_index; ++i) {
+          //new
+
           const float* phi_ptr = &local_phi(i - begin_index, 0);
 
+          //if (isZero(p_dw_val)) {
+          //  continue;
+          //}
+
+          // new
+          //bool non_zero = false;
+          for (int k = 0; k < num_topics; ++k) {
+            p_tdw[k] = theta_ptr[k] * phi_ptr[k];
+            //if (!non_zero && !isZero(p_tdw[k])) {
+            //  non_zero = true;
+            //}
+          }
+
+          //if (!non_zero) {
+          //  continue;
+          //}
+
+          std::discrete_distribution<int> distribution(p_tdw.begin(), p_tdw.end());
+          ++ntd_ptr[distribution(generator)];
+        }
+
+        for (int k = 0; k < num_topics; ++k) {
+          theta_ptr[k] = ntd_ptr[k];
+        }
+
+        /*
+        for (int i = begin_index; i < end_index; ++i) {
+
+
+          const float* phi_ptr = &local_phi(i - begin_index, 0);
+
+          // Подсчёт нормировочной константы для распределения p_tdw - ФИКСИРОВАНО
           float p_dw_val = 0.0f;
           for (int k = 0; k < num_topics; ++k) {
             p_dw_val += phi_ptr[k] * theta_ptr[k];
@@ -466,9 +525,14 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const ProcessBatchesArgs& ar
           }
         }
 
+
+
         for (int k = 0; k < num_topics; ++k) {
           theta_ptr[k] *= ntd_ptr[k];
         }
+        */
+
+
 
         r_td.InitializeZeros();
         theta_agents.Apply(d, inner_iter, num_topics, theta_ptr, r_td.get_data());
